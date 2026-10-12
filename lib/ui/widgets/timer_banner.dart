@@ -1,0 +1,223 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../data/database.dart';
+import '../../state/providers.dart';
+import '../focus_timer_page.dart';
+
+String formatDuration(int seconds) {
+  final d = Duration(seconds: seconds);
+  final h = d.inHours;
+  final m = d.inMinutes % 60;
+  final s = d.inSeconds % 60;
+  String two(int v) => v.toString().padLeft(2, '0');
+  return h > 0 ? '$h:${two(m)}:${two(s)}' : '${two(m)}:${two(s)}';
+}
+
+/// 开始为一个 / 一次任务计时，并进入专注计时页。
+Future<void> startTimerFor(
+  BuildContext context,
+  WidgetRef ref, {
+  required int bookId,
+  int? taskId,
+}) async {
+  if (ref.read(activeTimerProvider) != null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('已有正在进行的计时，请先结束')),
+    );
+    return;
+  }
+  await ref.read(repositoryProvider).startTimer(bookId: bookId, taskId: taskId);
+  if (!context.mounted) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const FocusTimerPage()),
+  );
+}
+
+/// 打开专注计时页。
+Future<void> openFocusTimer(BuildContext context) {
+  return Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const FocusTimerPage()),
+  );
+}
+
+/// 结束计时对话框：确认用时、页数与是否完成任务。
+Future<void> showStopTimerDialog(
+  BuildContext context,
+  WidgetRef ref,
+) async {
+  final timer = ref.read(activeTimerProvider);
+  if (timer == null) return;
+  final repo = ref.read(repositoryProvider);
+  final task = timer.taskId == null ? null : await repo.getTask(timer.taskId!);
+  final book = await repo.getBook(timer.bookId);
+  final elapsed = timer.elapsedSecondsAt(DateTime.now());
+  if (!context.mounted) return;
+
+  final pageController = TextEditingController(
+    text: (task?.endPage ?? book?.currentPage)?.toString() ?? '',
+  );
+  var completeTask = task != null;
+
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) => StatefulBuilder(
+      builder: (context, setState) => AlertDialog(
+        title: const Text('结束计时'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.timer_outlined),
+                const SizedBox(width: 8),
+                Text('本次用时 ${formatDuration(elapsed)}',
+                    style: Theme.of(context).textTheme.titleMedium),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (task != null) ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: completeTask,
+                onChanged: (v) => setState(() => completeTask = v),
+                title: const Text('标记该任务已完成'),
+                subtitle: Text('计划第 ${task.startPage}–${task.endPage} 页'),
+              ),
+              const SizedBox(height: 4),
+            ],
+            TextField(
+              controller: pageController,
+              keyboardType: TextInputType.number,
+              autofocus: task == null,
+              decoration: _pageField(book),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, 'abandon'),
+            child: const Text('放弃计时'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, 'save'),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    ),
+  );
+
+  if (result == 'abandon') {
+    await repo.cancelTimer();
+    return;
+  }
+  if (result != 'save') return;
+  final reached = int.tryParse(pageController.text.trim());
+  await repo.stopTimer(reachedPage: reached, completeTask: completeTask);
+}
+
+InputDecoration _pageField(Book? book) => InputDecoration(
+      labelText: '读到第几页',
+      hintText: book != null ? '共 ${book.totalPages} 页' : null,
+      suffixText: '页',
+      border: const OutlineInputBorder(),
+    );
+
+/// 底部常驻计时条，只在计时中存在，每秒刷新已用时长（暂停时不刷新）。
+class TimerBanner extends ConsumerStatefulWidget {
+  const TimerBanner({super.key});
+
+  @override
+  ConsumerState<TimerBanner> createState() => _TimerBannerState();
+}
+
+class _TimerBannerState extends ConsumerState<TimerBanner> {
+  Timer? _ticker;
+
+  void _syncTicker(bool running) {
+    if (running && _ticker == null) {
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else if (!running && _ticker != null) {
+      _ticker!.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final timer = ref.watch(activeTimerProvider);
+    _syncTicker(timer?.isRunning ?? false);
+    ref.listen(activeTimerProvider, (_, next) => _syncTicker(next?.isRunning ?? false));
+    if (timer == null) return const SizedBox.shrink();
+
+    final scheme = Theme.of(context).colorScheme;
+    final book = ref.watch(bookProvider(timer.bookId)).valueOrNull;
+    final elapsed = timer.elapsedSecondsAt(DateTime.now());
+
+    return Material(
+      color: scheme.primaryContainer,
+      child: InkWell(
+        onTap: () => openFocusTimer(context),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+          child: Row(
+            children: [
+              Icon(Icons.timer_outlined, color: scheme.onPrimaryContainer),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      book?.title ?? '阅读中',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: scheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      '${timer.isRunning ? '计时中' : '已暂停'} · ${formatDuration(elapsed)}',
+                      style: TextStyle(
+                        color: scheme.onPrimaryContainer.withValues(alpha: 0.8),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                tooltip: timer.isRunning ? '暂停' : '继续',
+                icon: Icon(
+                  timer.isRunning ? Icons.pause : Icons.play_arrow,
+                  color: scheme.onPrimaryContainer,
+                ),
+                onPressed: () {
+                  final repo = ref.read(repositoryProvider);
+                  timer.isRunning ? repo.pauseTimer() : repo.resumeTimer();
+                },
+              ),
+              FilledButton.tonal(
+                onPressed: () => showStopTimerDialog(context, ref),
+                child: const Text('结束'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
