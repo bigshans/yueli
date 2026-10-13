@@ -669,6 +669,13 @@ class ReadingRepository {
         .watch();
   }
 
+  /// 全部书的计时记录（按时间倒序），用于全局统计。
+  Stream<List<ReadingSession>> watchAllSessions() {
+    return (db.select(db.readingSessions)
+          ..orderBy([(t) => OrderingTerm.desc(t.startedAt)]))
+        .watch();
+  }
+
   /// 按天聚合的阅读统计（倒序，最近的在前面）。
   Stream<List<DailyStat>> watchDailyStats(int bookId) {
     return watchSessions(bookId).map((sessions) {

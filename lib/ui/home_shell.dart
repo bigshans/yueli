@@ -6,6 +6,7 @@ import '../state/providers.dart';
 import '../data/repository.dart';
 import 'books_page.dart';
 import 'calendar_page.dart';
+import 'global_stats_page.dart';
 import 'today_page.dart';
 import 'widgets/timer_banner.dart';
 
@@ -19,7 +20,12 @@ class HomeShell extends ConsumerStatefulWidget {
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
 
-  static const _pages = [TodayPage(), CalendarPage(), BooksPage()];
+  static const _pages = [
+    TodayPage(),
+    CalendarPage(),
+    BooksPage(),
+    GlobalStatsPage(),
+  ];
 
   @override
   void initState() {
@@ -85,6 +91,11 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             icon: Icon(Icons.menu_book_outlined),
             selectedIcon: Icon(Icons.menu_book),
             label: '书架',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_outlined),
+            selectedIcon: Icon(Icons.insights),
+            label: '统计',
           ),
         ],
           ),

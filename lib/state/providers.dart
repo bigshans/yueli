@@ -87,3 +87,8 @@ final restDatesProvider =
     StreamProvider.family<Set<DateTime>, int>((ref, planId) {
   return ref.watch(repositoryProvider).watchRestDates(planId);
 });
+
+/// 全部书的计时记录（全局统计用）。
+final allSessionsProvider = StreamProvider<List<ReadingSession>>((ref) {
+  return ref.watch(repositoryProvider).watchAllSessions();
+});

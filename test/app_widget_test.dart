@@ -9,6 +9,7 @@ import 'package:reader_management/data/database.dart';
 import 'package:reader_management/data/repository.dart';
 import 'package:reader_management/state/providers.dart';
 import 'package:reader_management/ui/calendar_page.dart';
+import 'package:reader_management/ui/global_stats_page.dart';
 import 'package:reader_management/ui/stats_page.dart';
 
 void main() {
@@ -138,6 +139,44 @@ void main() {
     await tester.tap(find.text('明细'));
     await settle(tester);
     expect(find.textContaining('20:00'), findsWidgets);
+
+    await unmount(tester);
+  });
+
+  testWidgets('全局统计页：汇总与按书统计', (tester) async {
+    tester.view.physicalSize = const Size(1000, 2400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repo = ReadingRepository(db);
+    final a = await repo.createBook(title: '甲书', totalPages: 100);
+    final b = await repo.createBook(title: '乙书', totalPages: 100);
+    final t0 = today().add(const Duration(hours: 19));
+    await repo.startTimer(bookId: a, now: t0);
+    await repo.stopTimer(
+      reachedPage: 12,
+      now: t0.add(const Duration(minutes: 20)),
+    );
+    await repo.startTimer(bookId: b, now: t0.add(const Duration(hours: 1)));
+    await repo.stopTimer(
+      reachedPage: 8,
+      now: t0.add(const Duration(hours: 1, minutes: 15)),
+    );
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [databaseProvider.overrideWithValue(db)],
+      child: const MaterialApp(home: GlobalStatsPage()),
+    ));
+    await settle(tester);
+
+    expect(find.text('总览'), findsOneWidget);
+    expect(find.text('今日'), findsWidgets);
+
+    await tester.tap(find.text('按书'));
+    await settle(tester);
+    expect(find.text('甲书'), findsWidgets);
+    expect(find.text('乙书'), findsWidgets);
 
     await unmount(tester);
   });
