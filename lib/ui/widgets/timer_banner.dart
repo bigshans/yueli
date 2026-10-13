@@ -51,7 +51,12 @@ Future<void> showStopTimerDialog(
   final timer = ref.read(activeTimerProvider);
   if (timer == null) return;
   final repo = ref.read(repositoryProvider);
-  final task = timer.taskId == null ? null : await repo.getTask(timer.taskId!);
+  final boundTask =
+      timer.taskId == null ? null : await repo.getTask(timer.taskId!);
+  // 自由计时时，归到今天这本书的任务，这样时长也能计进去。
+  final task = boundTask ??
+      await repo.taskForBookOnDate(timer.bookId, DateTime.now());
+  final attributed = boundTask == null && task != null;
   final book = await repo.getBook(timer.bookId);
   final elapsed = timer.elapsedSecondsAt(DateTime.now());
   if (!context.mounted) return;
@@ -59,7 +64,7 @@ Future<void> showStopTimerDialog(
   final pageController = TextEditingController(
     text: (task?.endPage ?? book?.currentPage)?.toString() ?? '',
   );
-  var completeTask = task != null;
+  var completeTask = boundTask != null;
 
   final result = await showDialog<String>(
     context: context,
@@ -78,6 +83,16 @@ Future<void> showStopTimerDialog(
                     style: Theme.of(context).textTheme.titleMedium),
               ],
             ),
+            if (attributed)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '会计入今天《${book?.title ?? ''}》的阅读任务',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                ),
+              ),
             const SizedBox(height: 16),
             if (task != null) ...[
               SwitchListTile(

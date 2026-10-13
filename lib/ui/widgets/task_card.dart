@@ -22,10 +22,23 @@ class TaskCard extends ConsumerWidget {
     final task = item.task;
     final muted = _done || _skipped;
 
+    // 实际用时按「书 + 日期」从计时记录聚合，与计时从哪里开始无关。
+    final daily = ref.watch(dailyStatsProvider(item.book.id)).valueOrNull;
+    DailyStat? dayStat;
+    if (daily != null) {
+      for (final d in daily) {
+        if (d.date == task.date) {
+          dayStat = d;
+          break;
+        }
+      }
+    }
+
     final parts = <String>[
       '第 ${task.startPage}–${task.endPage} 页',
       '预计 ${formatMinutes(task.plannedMinutes)}',
-      if (task.actualMinutes != null) '实际 ${formatMinutes(task.actualMinutes!)}',
+      if ((dayStat?.minutes ?? 0) > 0)
+        '已读 ${formatMinutes(dayStat!.minutes)}',
       if (_done && task.reachedPage != null) '读到第 ${task.reachedPage} 页',
     ];
 

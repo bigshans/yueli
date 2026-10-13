@@ -7,6 +7,7 @@ import '../data/repository.dart';
 import '../state/providers.dart';
 import 'book_form_page.dart';
 import 'plan_editor_page.dart';
+import 'stats_page.dart';
 import 'widgets/task_card.dart';
 import 'widgets/timer_banner.dart';
 
@@ -88,8 +89,8 @@ class BookDetailPage extends ConsumerWidget {
               ],
               const SizedBox(height: 16),
               _SectionCard(
-                title: '计时记录',
-                child: _SessionHistory(bookId: bookId),
+                title: '阅读历史',
+                child: _RecentHistory(bookId: bookId),
               ),
               const SizedBox(height: 16),
               if (tasks.isNotEmpty) ...[
@@ -337,7 +338,7 @@ class _PlanSummary extends StatelessWidget {
   }
 }
 
-class _Stats extends StatelessWidget {
+class _Stats extends ConsumerWidget {
   const _Stats({
     required this.book,
     required this.stats,
@@ -349,16 +350,33 @@ class _Stats extends StatelessWidget {
   final AppSetting settings;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final s = stats;
     final avg = s?.averagePagesPerHour;
     final source = book.manualPagesPerHour != null
         ? '手动设置'
         : (book.measuredPagesPerHour != null ? '自动学习' : '全局默认');
 
+    final daily = ref.watch(dailyStatsProvider(book.id)).valueOrNull;
+    DailyStat? todayStat;
+    if (daily != null) {
+      final t = today();
+      for (final d in daily) {
+        if (d.date == t) {
+          todayStat = d;
+          break;
+        }
+      }
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        _row(
+            '今日',
+            todayStat == null
+                ? '暂无记录'
+                : '${formatMinutes(todayStat.minutes)} · ${todayStat.pages} 页 · ${todayStat.sessions} 次'),
         _row('计时次数', '${s?.sessionCount ?? 0} 次'),
         _row('累计时长', formatMinutes(((s?.totalSeconds ?? 0) / 60).round())),
         _row('累计页数', '${s?.totalPages ?? 0} 页'),
@@ -407,77 +425,77 @@ class _Stats extends StatelessWidget {
   }
 }
 
-class _SessionHistory extends ConsumerWidget {
-  const _SessionHistory({required this.bookId});
+class _RecentHistory extends ConsumerWidget {
+  const _RecentHistory({required this.bookId});
   final int bookId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(sessionsProvider(bookId));
+    final async = ref.watch(dailyStatsProvider(bookId));
     return async.when(
       loading: () => const Padding(
         padding: EdgeInsets.all(8),
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
       error: (e, _) => Text('出错了：$e'),
-      data: (sessions) {
-        if (sessions.isEmpty) {
+      data: (stats) {
+        if (stats.isEmpty) {
           return Text(
-            '还没有计时记录。点上面的「开始计时阅读」，系统会据此学习你的阅读速度。',
+            '还没有阅读记录。点上面的「开始计时阅读」，系统会据此学习你的阅读速度。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           );
         }
-        final shown = sessions.take(12).toList();
+        final shown = stats.take(5).toList();
         return Column(
           children: [
             for (final s in shown) _row(context, s),
-            if (sessions.length > shown.length)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: Text(
-                  '仅显示最近 ${shown.length} 条，共 ${sessions.length} 条',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+            const SizedBox(height: 4),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => StatsPage(bookId: bookId),
+                  ),
+                ),
+                icon: const Icon(Icons.insights_outlined, size: 18),
+                label: Text(
+                  stats.length > shown.length
+                      ? '查看全部统计（共 ${stats.length} 天）'
+                      : '查看全部统计',
                 ),
               ),
+            ),
           ],
         );
       },
     );
   }
 
-  Widget _row(BuildContext context, ReadingSession s) {
+  Widget _row(BuildContext context, DailyStat s) {
     final scheme = Theme.of(context).colorScheme;
-    final pace = (s.pagesRead != null &&
-            s.pagesRead! > 0 &&
-            s.durationSeconds > 0)
-        ? s.pagesRead! / (s.durationSeconds / 3600)
-        : null;
-    final d = s.startedAt;
-    final hh = d.hour.toString().padLeft(2, '0');
-    final mm = d.minute.toString().padLeft(2, '0');
+    final pace = s.pace;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.timer_outlined, size: 16, color: scheme.outline),
+          Icon(Icons.event_available_outlined, size: 16, color: scheme.outline),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${d.month}/${d.day} $hh:$mm',
+                  '${s.date.month}/${s.date.day} '
+                  '${const ['一', '二', '三', '四', '五', '六', '日'][s.date.weekday - 1]}',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w500, fontSize: 13),
+                      fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 Text(
-                  '${formatDuration(s.durationSeconds)}'
-                  '${s.pagesRead != null ? ' · ${s.pagesRead} 页' : ''}'
+                  '${formatMinutes(s.minutes)} · ${s.pages} 页 · ${s.sessions} 次'
                   '${pace != null ? ' · ${pace.toStringAsFixed(0)} 页/小时' : ''}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,

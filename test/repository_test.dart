@@ -262,6 +262,53 @@ void main() {
     expect(plan!.dailyPages, 20);
   });
 
+  test('自由计时也会计入今天这本书的任务', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final todayTask = await repo.taskForBookOnDate(id, DateTime.now());
+    expect(todayTask, isNotNull);
+
+    // 不绑定任务，就像从读物详情页开始计时
+    final t0 = today().add(const Duration(hours: 20));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(now: t0.add(const Duration(minutes: 25)));
+
+    // 时长归到今天这本书的任务上
+    final sessions = await repo.watchSessions(id).first;
+    expect(sessions.single.taskId, todayTask!.id);
+
+    // 按天聚合能反映出来
+    final daily = await repo.watchDailyStats(id).first;
+    expect(daily.single.minutes, 25);
+  });
+
+  test('同一天多次计时按天聚合', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final t0 = today().add(const Duration(hours: 20));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(now: t0.add(const Duration(minutes: 20)));
+    await repo.startTimer(bookId: id, now: t0.add(const Duration(hours: 1)));
+    await repo.stopTimer(now: t0.add(const Duration(hours: 1, minutes: 15)));
+
+    final daily = await repo.watchDailyStats(id).first;
+    expect(daily.length, 1);
+    expect(daily.single.minutes, 35);
+    expect(daily.single.sessions, 2);
+  });
+
   test('暂停/继续：只累计真正在跑的时长', () async {
     final id = await repo.createBook(title: '书', totalPages: 100);
     final t0 = DateTime(2025, 1, 6, 20, 0);

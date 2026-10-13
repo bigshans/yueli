@@ -38,6 +38,26 @@ class BookStats {
       sessionCount > 0 ? totalPages / sessionCount : null;
 }
 
+/// 某一天的阅读汇总。
+class DailyStat {
+  const DailyStat({
+    required this.date,
+    required this.seconds,
+    required this.pages,
+    required this.sessions,
+  });
+
+  final DateTime date;
+  final int seconds;
+  final int pages;
+  final int sessions;
+
+  int get minutes => (seconds / 60).round();
+
+  double? get pace =>
+      (pages > 0 && seconds > 0) ? pages / (seconds / 3600) : null;
+}
+
 /// 当前正在进行的计时。
 class ActiveTimer {
   const ActiveTimer({
@@ -442,10 +462,10 @@ class ReadingRepository {
     );
   }
 
-  /// 结束计时：写一条 session，更新进度并重排。
+  /// 结束计时：写一条 session，把时长累加到「这本书今天的任务」，更新进度并重排。
   ///
-  /// [completeTask] 为 true 且计时绑定任务时，把该任务标记完成并推进到任务末页；
-  /// 否则按 [reachedPage]（读到的绝对页码）直接更新进度。
+  /// 无论计时从哪开始（任务卡 / 读物详情），只要这本书今天有任务，
+  /// 时长就会计进该任务；[completeTask] 为 true 时同时把任务标记完成。
   Future<void> stopTimer({
     int? reachedPage,
     bool completeTask = false,
@@ -462,21 +482,26 @@ class ReadingRepository {
         ? 0
         : max<int>(0, endedAt.difference(runningSince).inSeconds);
     final seconds = max<int>(1, settings.activeAccumulatedSeconds + live);
-    final taskId = settings.activeTaskId;
+    final startedTaskId = settings.activeTaskId;
 
     final book = await getBook(bookId);
 
+    // 归属任务：计时时绑定的任务优先；否则归到这本书「今天」的任务。
     Task? task;
-    if (completeTask && taskId != null) {
-      task = await getTask(taskId);
+    if (startedTaskId != null) {
+      task = await getTask(startedTaskId);
+    } else {
+      task = await taskForBookOnDate(bookId, endedAt);
     }
 
     // 实际读到的页码；以及本次推进的页数（用于统计与速度学习）。
     int? effectiveReached;
     int? pagesRead;
     if (task != null) {
-      effectiveReached = reachedPage ?? task.endPage;
-      pagesRead = max<int>(0, effectiveReached - (task.startPage - 1));
+      effectiveReached = reachedPage ?? (completeTask ? task.endPage : null);
+      pagesRead = effectiveReached == null
+          ? null
+          : max<int>(0, effectiveReached - (task.startPage - 1));
     } else if (reachedPage != null && book != null) {
       effectiveReached = reachedPage.clamp(0, book.totalPages);
       pagesRead = max<int>(0, effectiveReached - book.currentPage);
@@ -484,7 +509,7 @@ class ReadingRepository {
 
     await db.into(db.readingSessions).insert(ReadingSessionsCompanion.insert(
           bookId: bookId,
-          taskId: Value(taskId),
+          taskId: Value(task?.id),
           startedAt: startedAt,
           endedAt: endedAt,
           durationSeconds: seconds,
@@ -494,19 +519,27 @@ class ReadingRepository {
     await cancelTimer();
 
     if (task != null) {
-      final completed = task;
-      await (db.update(db.tasks)..where((t) => t.id.equals(completed.id)))
-          .write(
+      final target = task;
+      await (db.update(db.tasks)..where((t) => t.id.equals(target.id))).write(
         TasksCompanion(
-          status: const Value('done'),
-          actualMinutes: Value((seconds / 60).round()),
-          reachedPage: Value(effectiveReached),
+          status: completeTask ? const Value('done') : const Value.absent(),
+          // 仅完成任务时写入；否则会用「按天聚合的 session」展示实际用时，
+          // 以免被重排（删建 pending 任务）抹掉。
+          actualMinutes: completeTask
+              ? Value((target.actualMinutes ?? 0) + (seconds / 60).round())
+              : const Value.absent(),
+          reachedPage: reachedPage == null
+              ? const Value.absent()
+              : Value(reachedPage),
         ),
       );
-      if (book != null && effectiveReached != null) {
+      final newPage = completeTask
+          ? (reachedPage ?? target.endPage)
+          : reachedPage;
+      if (newPage != null && book != null) {
         await (db.update(db.books)..where((t) => t.id.equals(book.id))).write(
           BooksCompanion(
-            currentPage: Value(effectiveReached.clamp(0, book.totalPages)),
+            currentPage: Value(newPage.clamp(0, book.totalPages)),
           ),
         );
       }
@@ -519,6 +552,18 @@ class ReadingRepository {
     await recomputeMeasuredPace(bookId);
     final plan = await getPlanForBook(bookId);
     if (plan != null) await reschedulePlan(plan.id);
+  }
+
+  /// 某本书在某天的任务（优先未完成的）。
+  Future<Task?> taskForBookOnDate(int bookId, DateTime date) {
+    return (db.select(db.tasks)
+          ..where((t) =>
+              t.bookId.equals(bookId) &
+              t.date.equals(dateOnly(date)) &
+              t.status.isNotValue('skipped'))
+          ..orderBy([(t) => OrderingTerm.asc(t.id)])
+          ..limit(1))
+        .getSingleOrNull();
   }
 
   /// 根据该书所有计时记录重算自动学习速度。
@@ -543,6 +588,30 @@ class ReadingRepository {
           ..where((t) => t.bookId.equals(bookId))
           ..orderBy([(t) => OrderingTerm.desc(t.startedAt)]))
         .watch();
+  }
+
+  /// 按天聚合的阅读统计（倒序，最近的在前面）。
+  Stream<List<DailyStat>> watchDailyStats(int bookId) {
+    return watchSessions(bookId).map((sessions) {
+      final acc = <DateTime, _DayAcc>{};
+      for (final s in sessions) {
+        final d = dateOnly(s.startedAt);
+        final a = acc.putIfAbsent(d, _DayAcc.new);
+        a.seconds += s.durationSeconds;
+        a.pages += s.pagesRead ?? 0;
+        a.sessions += 1;
+      }
+      final list = [
+        for (final e in acc.entries)
+          DailyStat(
+            date: e.key,
+            seconds: e.value.seconds,
+            pages: e.value.pages,
+            sessions: e.value.sessions,
+          ),
+      ]..sort((a, b) => b.date.compareTo(a.date));
+      return list;
+    });
   }
 
   Future<BookStats> bookStats(int bookId) async {
@@ -595,4 +664,10 @@ class ReadingRepository {
     readingDays: 0,
     hasDeadline: false,
   );
+}
+
+class _DayAcc {
+  int seconds = 0;
+  int pages = 0;
+  int sessions = 0;
 }

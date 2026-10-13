@@ -69,3 +69,9 @@ final sessionsProvider =
     StreamProvider.family<List<ReadingSession>, int>((ref, bookId) {
   return ref.watch(repositoryProvider).watchSessions(bookId);
 });
+
+/// 一本书按天聚合的阅读统计（倒序）。
+final dailyStatsProvider =
+    StreamProvider.family<List<DailyStat>, int>((ref, bookId) {
+  return ref.watch(repositoryProvider).watchDailyStats(bookId);
+});
