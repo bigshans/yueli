@@ -5,14 +5,14 @@ import 'tables.dart';
 
 part 'database.g.dart';
 
-@DriftDatabase(tables: [Books, Plans, Tasks, ReadingSessions, AppSettings])
+@DriftDatabase(tables: [Books, Plans, Tasks, ReadingSessions, RestDays, AppSettings])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   static QueryExecutor _open() => driftDatabase(name: 'reader_management');
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -37,6 +37,9 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 5) {
             await m.addColumn(tasks, tasks.reachedPage);
+          }
+          if (from < 6) {
+            await m.createTable(restDays);
           }
         },
         beforeOpen: (details) async {

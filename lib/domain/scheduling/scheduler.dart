@@ -16,6 +16,7 @@ class ScheduleInput {
     required this.weekdays,
     required this.pagesPerHour,
     this.dailyPages,
+    this.restDates = const {},
   });
 
   final int currentPage;
@@ -30,6 +31,9 @@ class ScheduleInput {
 
   /// 页数优先：每个阅读日要读多少页。非空时忽略 [dailyMinutes]。
   final int? dailyPages;
+
+  /// 指定休息的日子（不排阅读）。
+  final Set<DateTime> restDates;
 
   /// ISO 星期：1=周一 .. 7=周日。
   final Set<int> weekdays;
@@ -120,7 +124,12 @@ ScheduleResult buildSchedule(ScheduleInput input, {DateTime? from}) {
   final end = hasDeadline
       ? input.deadline!
       : addDays(start, kNoDeadlineHorizonDays);
-  final days = readingDays(start: start, end: end, weekdays: input.weekdays);
+  final days = readingDays(
+    start: start,
+    end: end,
+    weekdays: input.weekdays,
+    except: input.restDates,
+  );
 
   // 页数优先模式不依赖每日时长，故 capacity 为 0 也能排。
   if (days.isEmpty || (!byPages && capacity <= 0)) return empty();
@@ -158,15 +167,94 @@ ScheduleResult buildSchedule(ScheduleInput input, {DateTime? from}) {
   );
 }
 
-/// [start, end] 闭区间内、星期落在 [weekdays] 的日期列表。
+/// [start, end] 闭区间内、星期落在 [weekdays]、且不在 [except] 中的日期列表。
 List<DateTime> readingDays({
   required DateTime start,
   required DateTime end,
   required Set<int> weekdays,
+  Set<DateTime> except = const {},
 }) {
   if (weekdays.isEmpty) return const [];
   final s = dateOnly(start);
   final e = dateOnly(end);
   if (s.isAfter(e)) return const [];
-  return dateRange(s, e).where((d) => weekdays.contains(d.weekday)).toList();
+  return dateRange(s, e)
+      .where((d) => weekdays.contains(d.weekday) && !except.contains(d))
+      .toList();
+}
+
+/// 计划的进度投影：领先/落后、预计读完。
+class PlanProgress {
+  const PlanProgress({
+    required this.hasDeadline,
+    this.aheadPages,
+    this.estimatedFinish,
+    this.pagesPerReadingDay = 0,
+  });
+
+  final bool hasDeadline;
+
+  /// >0 领先计划，<0 落后计划（页）。无截止日时为 null。
+  final int? aheadPages;
+  final DateTime? estimatedFinish;
+  final int pagesPerReadingDay;
+}
+
+/// 按当前进度重新投影：与「从开始日到截止日均匀推进」的理想线相比领先/落后多少，
+/// 以及按当前速度预计什么时候读完。
+PlanProgress computeProgress({
+  required int currentPage,
+  required int totalPages,
+  required DateTime startDate,
+  required DateTime? deadline,
+  required int dailyMinutes,
+  required int? dailyPages,
+  required Set<int> weekdays,
+  required int pagesPerHour,
+  Set<DateTime> restDates = const {},
+  DateTime? now,
+}) {
+  final today = dateOnly(now ?? DateTime.now());
+  final result = buildSchedule(
+    ScheduleInput(
+      currentPage: currentPage,
+      totalPages: totalPages,
+      startDate: startDate,
+      deadline: deadline,
+      dailyMinutes: dailyMinutes,
+      dailyPages: dailyPages,
+      weekdays: weekdays,
+      pagesPerHour: pagesPerHour,
+      restDates: restDates,
+    ),
+    from: today,
+  );
+
+  int? ahead;
+  if (deadline != null) {
+    final totalDays = readingDays(
+      start: startDate,
+      end: deadline,
+      weekdays: weekdays,
+      except: restDates,
+    ).length;
+    final endOfElapsed = today.isAfter(deadline) ? deadline : today;
+    final elapsedDays = readingDays(
+      start: startDate,
+      end: endOfElapsed,
+      weekdays: weekdays,
+      except: restDates,
+    ).length;
+    if (totalDays > 0) {
+      final ideal = (totalPages * elapsedDays / totalDays).round();
+      ahead = currentPage - ideal;
+    }
+  }
+
+  return PlanProgress(
+    hasDeadline: deadline != null,
+    aheadPages: ahead,
+    estimatedFinish: result.estimatedFinish,
+    pagesPerReadingDay: result.pagesPerReadingDay,
+  );
 }

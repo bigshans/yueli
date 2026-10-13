@@ -34,11 +34,22 @@ class TaskCard extends ConsumerWidget {
       }
     }
 
+    final targetPages = task.endPage - task.startPage + 1;
+    final readPages = dayStat?.pages ?? 0;
+    final readMinutes = dayStat?.minutes ?? 0;
+    final pagePart = readPages > 0
+        ? '已读 $readPages / $targetPages 页'
+        : '目标 $targetPages 页';
+    final overPart =
+        readPages > targetPages ? '超额 +${readPages - targetPages} 页' : null;
+    final timePart = readMinutes > 0
+        ? '用时 ${formatMinutes(readMinutes)}'
+        : '预计 ${formatMinutes(task.plannedMinutes)}';
     final parts = <String>[
       '第 ${task.startPage}–${task.endPage} 页',
-      '预计 ${formatMinutes(task.plannedMinutes)}',
-      if ((dayStat?.minutes ?? 0) > 0)
-        '已读 ${formatMinutes(dayStat!.minutes)}',
+      pagePart,
+      if (overPart != null) overPart,
+      timePart,
       if (_done && task.reachedPage != null) '读到第 ${task.reachedPage} 页',
     ];
 
@@ -92,6 +103,18 @@ class TaskCard extends ConsumerWidget {
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
+                  if (!_done && !_skipped && readPages > 0 && targetPages > 0) ...[
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: (readPages / targetPages).clamp(0.0, 1.0),
+                        minHeight: 5,
+                        backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

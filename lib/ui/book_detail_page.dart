@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/date_x.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
+import '../domain/scheduling/scheduler.dart';
 import '../state/providers.dart';
 import 'book_form_page.dart';
 import 'plan_editor_page.dart';
@@ -74,23 +75,23 @@ class BookDetailPage extends ConsumerWidget {
                 label: Text(timingThis ? '结束计时' : '开始计时阅读'),
               ),
               const SizedBox(height: 16),
-              _SectionCard(
-                title: '阅读排期',
-                child: plan == null
-                    ? _NoPlan(book: book)
-                    : _PlanSummary(book: book, plan: plan),
-              ),
               if (settings != null) ...[
-                const SizedBox(height: 16),
                 _SectionCard(
                   title: '阅读统计',
                   child: _Stats(book: book, stats: stats, settings: settings),
                 ),
+                const SizedBox(height: 16),
               ],
-              const SizedBox(height: 16),
               _SectionCard(
                 title: '阅读历史',
                 child: _RecentHistory(bookId: bookId),
+              ),
+              const SizedBox(height: 16),
+              _SectionCard(
+                title: '阅读排期',
+                child: plan == null
+                    ? _NoPlan(book: book)
+                    : _PlanSummary(book: book, plan: plan, settings: settings),
               ),
               const SizedBox(height: 16),
               if (tasks.isNotEmpty) ...[
@@ -249,14 +250,17 @@ class _NoPlan extends StatelessWidget {
   }
 }
 
-class _PlanSummary extends StatelessWidget {
-  const _PlanSummary({required this.book, required this.plan});
+class _PlanSummary extends ConsumerWidget {
+  const _PlanSummary({required this.book, required this.plan, this.settings});
   final Book book;
   final Plan plan;
+  final AppSetting? settings;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final restDates =
+        ref.watch(restDatesProvider(plan.id)).valueOrNull ?? const <DateTime>{};
     final oversub = plan.status == 'oversubscribed';
     final statusText = switch (plan.status) {
       'completed' => '已完成',
@@ -266,6 +270,23 @@ class _PlanSummary extends StatelessWidget {
     };
     final weekdays = parseWeekdays(plan.weekdays);
     const names = {1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日'};
+
+    PlanProgress? progress;
+    if (settings != null) {
+      progress = computeProgress(
+        currentPage: book.currentPage,
+        totalPages: book.totalPages,
+        startDate: plan.startDate,
+        deadline: plan.deadline,
+        dailyMinutes: plan.dailyMinutes,
+        dailyPages: plan.dailyPages,
+        weekdays: weekdays,
+        pagesPerHour: effectivePace(book, settings!),
+        restDates: restDates,
+      );
+    }
+    final ahead = progress?.aheadPages;
+    final finish = progress?.estimatedFinish;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -279,6 +300,16 @@ class _PlanSummary extends StatelessWidget {
         else
           _row('每天时长', formatMinutes(plan.dailyMinutes)),
         _row('阅读日', weekdays.map((d) => names[d]).join(' ')),
+        if (ahead != null)
+          _row(
+            '进度',
+            ahead >= 0 ? '领先计划 $ahead 页' : '落后计划 ${-ahead} 页',
+            color: ahead >= 0
+                ? theme.colorScheme.primary
+                : theme.colorScheme.error,
+          ),
+        if (finish != null) _row('预计读完', formatDate(finish)),
+        _row('休息日', '${restDates.length} 天'),
         if (oversub) ...[
           const SizedBox(height: 8),
           Container(
@@ -296,14 +327,28 @@ class _PlanSummary extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => PlanEditorPage(bookId: book.id, plan: plan),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => PlanEditorPage(bookId: book.id, plan: plan),
+                ),
+              ),
+              icon: const Icon(Icons.edit_calendar),
+              label: const Text('调整排期'),
             ),
-          ),
-          icon: const Icon(Icons.edit_calendar),
-          label: const Text('调整排期'),
+            OutlinedButton.icon(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => _RestDaysDialog(plan: plan),
+              ),
+              icon: const Icon(Icons.beach_access_outlined),
+              label: Text('休息日（${restDates.length}）'),
+            ),
+          ],
         ),
       ],
     );
@@ -334,6 +379,76 @@ class _PlanSummary extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _RestDaysDialog extends ConsumerWidget {
+  const _RestDaysDialog({required this.plan});
+  final Plan plan;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final restDates =
+        ref.watch(restDatesProvider(plan.id)).valueOrNull ?? const <DateTime>{};
+    final sorted = restDates.toList()..sort();
+    final lastDate = plan.deadline ?? DateTime(today().year + 3);
+
+    return AlertDialog(
+      title: const Text('休息日'),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '休息日不安排阅读；多读的页数会优先抵消它们，'
+              '抵消满一天，那天就轻松了。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            if (sorted.isEmpty)
+              const Text('暂无休息日')
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final d in sorted)
+                    Chip(
+                      label: Text(formatDate(d)),
+                      onDeleted: () =>
+                          ref.read(repositoryProvider).removeRestDay(plan.id, d),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('关闭'),
+        ),
+        FilledButton.icon(
+          onPressed: () async {
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: today(),
+              firstDate: today(),
+              lastDate: lastDate.isBefore(today()) ? today() : lastDate,
+            );
+            if (picked != null) {
+              await ref.read(repositoryProvider).addRestDay(plan.id, picked);
+            }
+          },
+          icon: const Icon(Icons.add),
+          label: const Text('添加休息日'),
+        ),
+      ],
     );
   }
 }
@@ -431,15 +546,15 @@ class _RecentHistory extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final async = ref.watch(dailyStatsProvider(bookId));
+    final async = ref.watch(sessionsProvider(bookId));
     return async.when(
       loading: () => const Padding(
         padding: EdgeInsets.all(8),
         child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       ),
       error: (e, _) => Text('出错了：$e'),
-      data: (stats) {
-        if (stats.isEmpty) {
+      data: (sessions) {
+        if (sessions.isEmpty) {
           return Text(
             '还没有阅读记录。点上面的「开始计时阅读」，系统会据此学习你的阅读速度。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -447,7 +562,7 @@ class _RecentHistory extends ConsumerWidget {
                 ),
           );
         }
-        final shown = stats.take(5).toList();
+        final shown = sessions.take(5).toList();
         return Column(
           children: [
             for (final s in shown) _row(context, s),
@@ -462,8 +577,8 @@ class _RecentHistory extends ConsumerWidget {
                 ),
                 icon: const Icon(Icons.insights_outlined, size: 18),
                 label: Text(
-                  stats.length > shown.length
-                      ? '查看全部统计（共 ${stats.length} 天）'
+                  sessions.length > shown.length
+                      ? '查看全部（共 ${sessions.length} 次记录）'
                       : '查看全部统计',
                 ),
               ),
@@ -474,28 +589,34 @@ class _RecentHistory extends ConsumerWidget {
     );
   }
 
-  Widget _row(BuildContext context, DailyStat s) {
+  Widget _row(BuildContext context, ReadingSession s) {
     final scheme = Theme.of(context).colorScheme;
-    final pace = s.pace;
+    final pages = s.pagesRead;
+    final pace = (pages != null && pages > 0 && s.durationSeconds > 0)
+        ? pages / (s.durationSeconds / 3600)
+        : null;
+    final start = s.startedAt;
+    final hm =
+        '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.event_available_outlined, size: 16, color: scheme.outline),
+          Icon(Icons.timer_outlined, size: 16, color: scheme.outline),
           const SizedBox(width: 8),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${s.date.month}/${s.date.day} '
-                  '${const ['一', '二', '三', '四', '五', '六', '日'][s.date.weekday - 1]}',
+                  '${start.month}/${start.day} $hm',
                   style: const TextStyle(
                       fontWeight: FontWeight.w600, fontSize: 13),
                 ),
                 Text(
-                  '${formatMinutes(s.minutes)} · ${s.pages} 页 · ${s.sessions} 次'
+                  '${formatDuration(s.durationSeconds)}'
+                  '${pages != null ? ' · $pages 页' : ''}'
                   '${pace != null ? ' · ${pace.toStringAsFixed(0)} 页/小时' : ''}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,

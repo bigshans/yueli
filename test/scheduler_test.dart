@@ -170,6 +170,61 @@ void main() {
     expect(result.unassignedPages, 50);
   });
 
+  test('computeProgress：按截止日均匀线算出领先', () {
+    // 100 页，周一至周五 5 天；周三理想应到 60 页。
+    final p = computeProgress(
+      currentPage: 70,
+      totalPages: 100,
+      startDate: monday,
+      deadline: DateTime(2025, 1, 10),
+      dailyMinutes: 60,
+      dailyPages: null,
+      weekdays: const {1, 2, 3, 4, 5},
+      pagesPerHour: 30,
+      now: DateTime(2025, 1, 8), // 周三
+    );
+    expect(p.hasDeadline, isTrue);
+    expect(p.aheadPages, 10); // 70 - 60
+    expect(p.estimatedFinish, isNotNull);
+  });
+
+  test('computeProgress：无截止日不算领先/落后', () {
+    final p = computeProgress(
+      currentPage: 30,
+      totalPages: 100,
+      startDate: monday,
+      deadline: null,
+      dailyMinutes: 60,
+      dailyPages: null,
+      weekdays: const {1, 2, 3, 4, 5, 6, 7},
+      pagesPerHour: 30,
+      now: monday,
+    );
+    expect(p.hasDeadline, isFalse);
+    expect(p.aheadPages, isNull);
+    expect(p.estimatedFinish, isNotNull);
+  });
+
+  test('休息日不排阅读，页数摊到其他天', () {
+    // 100 页，周一至周五；周三休息 → 剩 4 天，每天 25 页。
+    final result = buildSchedule(
+      ScheduleInput(
+        currentPage: 0,
+        totalPages: 100,
+        startDate: monday,
+        deadline: DateTime(2025, 1, 10),
+        dailyMinutes: 60,
+        weekdays: const {1, 2, 3, 4, 5},
+        pagesPerHour: 30,
+        restDates: {DateTime(2025, 1, 8)}, // 周三
+      ),
+      from: monday,
+    );
+    expect(result.tasks.map((t) => t.date.weekday), isNot(contains(3)));
+    expect(result.tasks.length, 4);
+    expect(result.pagesPerReadingDay, 25);
+  });
+
   test('dateRange 跨月末不丢天', () {
     final days = dateRange(DateTime(2025, 1, 30), DateTime(2025, 2, 2)).toList();
     expect(days.length, 4);

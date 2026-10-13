@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/date_x.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'widgets/timer_banner.dart';
@@ -38,27 +39,39 @@ class _FocusTimerPageState extends ConsumerState<FocusTimerPage> {
     final timer = ref.watch(activeTimerProvider);
     final scheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('专注计时')),
-      body: timer == null
-          ? _Finished(onBack: () => Navigator.of(context).maybePop())
-          : _TimerBody(
-              timer: timer,
-              now: _now,
-              scheme: scheme,
-              onFinish: () async {
-                final navigator = Navigator.of(context);
-                await showStopTimerDialog(context, ref);
-                if (ref.read(activeTimerProvider) == null) {
+    return PopScope(
+      // 计时中时，返回键不直接退出，而是先结束/放弃计时。
+      canPop: timer == null,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final navigator = Navigator.of(context);
+        await showStopTimerDialog(context, ref);
+        if (ref.read(activeTimerProvider) == null) {
+          navigator.pop();
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(title: const Text('专注计时')),
+        body: timer == null
+            ? _Finished(onBack: () => Navigator.of(context).maybePop())
+            : _TimerBody(
+                timer: timer,
+                now: _now,
+                scheme: scheme,
+                onFinish: () async {
+                  final navigator = Navigator.of(context);
+                  await showStopTimerDialog(context, ref);
+                  if (ref.read(activeTimerProvider) == null) {
+                    navigator.pop();
+                  }
+                },
+                onAbandon: () async {
+                  final navigator = Navigator.of(context);
+                  await ref.read(repositoryProvider).cancelTimer();
                   navigator.pop();
-                }
-              },
-              onAbandon: () async {
-                final navigator = Navigator.of(context);
-                await ref.read(repositoryProvider).cancelTimer();
-                navigator.pop();
-              },
-            ),
+                },
+              ),
+      ),
     );
   }
 }
@@ -82,7 +95,22 @@ class _TimerBody extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final book = ref.watch(bookProvider(timer.bookId)).valueOrNull;
     final plan = ref.watch(planForBookProvider(timer.bookId)).valueOrNull;
-    final targetSeconds = (plan?.dailyMinutes ?? 30) * 60;
+    final settings = ref.watch(settingsProvider).valueOrNull;
+    final todayTask =
+        ref.watch(taskOnDateProvider((timer.bookId, today()))).valueOrNull;
+    final targetPages = todayTask == null
+        ? plan?.dailyPages
+        : todayTask.endPage - todayTask.startPage + 1;
+
+    final pace = (book != null && settings != null)
+        ? effectivePace(book, settings)
+        : (settings?.pagesPerHour ?? 30);
+    final targetMinutes = plan == null
+        ? 30
+        : (plan.dailyPages != null
+            ? (plan.dailyPages! / pace * 60).round()
+            : plan.dailyMinutes);
+    final targetSeconds = targetMinutes * 60;
     final elapsed = timer.elapsedSecondsAt(now);
     final progress = (elapsed / targetSeconds).clamp(0.0, 1.0);
     final overTarget = elapsed >= targetSeconds;
@@ -153,7 +181,12 @@ class _TimerBody extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            overTarget ? '已达成今天的阅读目标，好样的！' : '保持专注，放下手机',
+            overTarget
+                ? '已达成今日目标，真棒！'
+                : (targetPages != null
+                    ? '今日目标 $targetPages 页 · 专注读书，把手机放一边'
+                    : '专注读书中，把手机放到一边'),
+            textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: overTarget ? scheme.tertiary : scheme.onSurfaceVariant,
                 ),

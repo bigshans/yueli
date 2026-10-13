@@ -88,6 +88,16 @@ class ReadingSessions extends Table {
       dateTime().withDefault(currentDateAndTime)();
 }
 
+/// 指定某计划中某天休息（不安排阅读）。
+class RestDays extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get planId =>
+      integer().references(Plans, #id, onDelete: KeyAction.cascade)();
+  DateTimeColumn get date => dateTime()();
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+}
+
 /// 全局偏好，单行（id 恒为 1）。也保存当前正在进行的计时。
 class AppSettings extends Table {
   IntColumn get id => integer().withDefault(const Constant(1))();

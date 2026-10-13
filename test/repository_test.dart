@@ -309,6 +309,132 @@ void main() {
     expect(daily.single.sessions, 2);
   });
 
+  test('读满当天目标页数后自动完成任务', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60, // 100 页 / 5 天 → 每天 20 页
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final task = await repo.taskForBookOnDate(id, DateTime.now());
+    final targetPages = task!.endPage - task.startPage + 1;
+    expect(targetPages, 20);
+
+    final t0 = today().add(const Duration(hours: 20));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(
+      reachedPage: targetPages,
+      now: t0.add(const Duration(minutes: 30)),
+    );
+
+    final after = await repo.getTask(task.id);
+    expect(after!.status, 'done'); // 自动完成
+  });
+
+  test('未读满当天目标页数则不自动完成', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final task = await repo.taskForBookOnDate(id, DateTime.now());
+    final targetPages = task!.endPage - task.startPage + 1;
+
+    final t0 = today().add(const Duration(hours: 20));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(
+      reachedPage: targetPages - 5,
+      now: t0.add(const Duration(minutes: 20)),
+    );
+
+    final today2 = await repo.taskForBookOnDate(id, DateTime.now());
+    expect(today2!.status, 'pending');
+  });
+
+  test('超额阅读会提前进度，后续每天页数相应减少', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60, // 100 页 / 5 天 → 每天 20 页
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+
+    // 今天目标 20 页，实际读了 50 页
+    final t0 = today().add(const Duration(hours: 20));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(
+      reachedPage: 50,
+      now: t0.add(const Duration(minutes: 60)),
+    );
+
+    final book = await repo.getBook(id);
+    expect(book!.currentPage, 50); // 超出部分计入进度
+
+    final next = await repo.tasksBetween(
+      addDays(today(), 1),
+      addDays(today(), 4),
+    );
+    // 剩余 50 页 / 4 天 = 13 页/天，从第 51 页继续
+    expect(next.first.task.startPage, 51);
+    expect(next.first.task.endPage - next.first.task.startPage + 1, 13);
+  });
+
+  test('同一任务多次计时，页数按增量累计不重复', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final t0 = today().add(const Duration(hours: 18));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(
+      reachedPage: 20,
+      now: t0.add(const Duration(minutes: 20)),
+    );
+    await repo.startTimer(bookId: id, now: t0.add(const Duration(hours: 1)));
+    await repo.stopTimer(
+      reachedPage: 32,
+      now: t0.add(const Duration(hours: 1, minutes: 15)),
+    );
+
+    final daily = await repo.watchDailyStats(id).first;
+    expect(daily.single.pages, 32); // 不是 20 + 32 = 52
+  });
+
+  test('设为休息日后那天不再排阅读，页数重新分配', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final plan = await repo.getPlanForBook(id);
+    final restDate = addDays(today(), 1);
+
+    await repo.addRestDay(plan!.id, restDate);
+
+    final tasks = await repo.tasksBetween(today(), addDays(today(), 4));
+    expect(tasks.any((t) => t.task.date == restDate), isFalse);
+    expect(await repo.restDates(plan.id), contains(restDate));
+    // 100 页摊到剩余 4 天 → 25 页/天
+    expect(
+      tasks.first.task.endPage - tasks.first.task.startPage + 1,
+      25,
+    );
+  });
+
   test('暂停/继续：只累计真正在跑的时长', () async {
     final id = await repo.createBook(title: '书', totalPages: 100);
     final t0 = DateTime(2025, 1, 6, 20, 0);

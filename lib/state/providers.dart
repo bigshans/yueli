@@ -75,3 +75,15 @@ final dailyStatsProvider =
     StreamProvider.family<List<DailyStat>, int>((ref, bookId) {
   return ref.watch(repositoryProvider).watchDailyStats(bookId);
 });
+
+/// 某本书某天的任务（用于「今日目标」）。
+final taskOnDateProvider =
+    StreamProvider.family<Task?, (int, DateTime)>((ref, arg) {
+  return ref.watch(repositoryProvider).watchTaskForBookOnDate(arg.$1, arg.$2);
+});
+
+/// 某计划的休息日。
+final restDatesProvider =
+    StreamProvider.family<Set<DateTime>, int>((ref, planId) {
+  return ref.watch(repositoryProvider).watchRestDates(planId);
+});

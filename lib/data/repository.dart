@@ -220,6 +220,42 @@ class ReadingRepository {
     await (db.delete(db.plans)..where((t) => t.id.equals(planId))).go();
   }
 
+  // ---------- 休息日 ----------
+
+  Stream<Set<DateTime>> watchRestDates(int planId) {
+    return (db.select(db.restDays)..where((t) => t.planId.equals(planId)))
+        .watch()
+        .map((rows) => rows.map((r) => dateOnly(r.date)).toSet());
+  }
+
+  Future<Set<DateTime>> restDates(int planId) async {
+    final rows =
+        await (db.select(db.restDays)..where((t) => t.planId.equals(planId)))
+            .get();
+    return rows.map((r) => dateOnly(r.date)).toSet();
+  }
+
+  Future<void> addRestDay(int planId, DateTime date) async {
+    final d = dateOnly(date);
+    final existing = await (db.select(db.restDays)
+          ..where((t) => t.planId.equals(planId) & t.date.equals(d)))
+        .getSingleOrNull();
+    if (existing == null) {
+      await db.into(db.restDays).insert(
+            RestDaysCompanion.insert(planId: planId, date: d),
+          );
+    }
+    await reschedulePlan(planId);
+  }
+
+  Future<void> removeRestDay(int planId, DateTime date) async {
+    await (db.delete(db.restDays)
+          ..where((t) =>
+              t.planId.equals(planId) & t.date.equals(dateOnly(date))))
+        .go();
+    await reschedulePlan(planId);
+  }
+
   /// 自愈式重排：清掉该计划所有 pending 任务，从当前进度重新排到今天之后。
   Future<ScheduleResult> reschedulePlan(int planId, {DateTime? now}) async {
     final plan = await getPlan(planId);
@@ -242,6 +278,7 @@ class ReadingRepository {
     final from = handledToday.isEmpty ? nowDate : addDays(nowDate, 1);
 
     final settings = await db.loadSettings();
+    final rests = await restDates(planId);
     final result = buildSchedule(
       ScheduleInput(
         currentPage: book.currentPage,
@@ -252,6 +289,7 @@ class ReadingRepository {
         weekdays: parseWeekdays(plan.weekdays),
         pagesPerHour: effectivePace(book, settings),
         dailyPages: plan.dailyPages,
+        restDates: rests,
       ),
       from: from,
     );
@@ -494,18 +532,19 @@ class ReadingRepository {
       task = await taskForBookOnDate(bookId, endedAt);
     }
 
-    // 实际读到的页码；以及本次推进的页数（用于统计与速度学习）。
+    // 本次读到的页码（绝对值），以及本次推进的页数（相对上次进度的增量）。
+    // 用增量而非任务起始页，避免同一任务多次计时重复计数。
+    final previousPage =
+        book?.currentPage ?? ((task != null ? task.startPage : 1) - 1);
     int? effectiveReached;
-    int? pagesRead;
     if (task != null) {
       effectiveReached = reachedPage ?? (completeTask ? task.endPage : null);
-      pagesRead = effectiveReached == null
-          ? null
-          : max<int>(0, effectiveReached - (task.startPage - 1));
     } else if (reachedPage != null && book != null) {
       effectiveReached = reachedPage.clamp(0, book.totalPages);
-      pagesRead = max<int>(0, effectiveReached - book.currentPage);
     }
+    final pagesRead = effectiveReached == null
+        ? null
+        : max<int>(0, effectiveReached - previousPage);
 
     await db.into(db.readingSessions).insert(ReadingSessionsCompanion.insert(
           bookId: bookId,
@@ -549,6 +588,18 @@ class ReadingRepository {
       );
     }
 
+    // 达到今天的目标页数就自动完成任务。
+    if (task != null && !completeTask) {
+      final targetPages = task.endPage - task.startPage + 1;
+      final readToday = await pagesReadOn(bookId, endedAt);
+      if (readToday >= targetPages) {
+        await (db.update(db.tasks)..where((t) => t.id.equals(task!.id)))
+            .write(
+          const TasksCompanion(status: Value('done')),
+        );
+      }
+    }
+
     await recomputeMeasuredPace(bookId);
     final plan = await getPlanForBook(bookId);
     if (plan != null) await reschedulePlan(plan.id);
@@ -564,6 +615,34 @@ class ReadingRepository {
           ..orderBy([(t) => OrderingTerm.asc(t.id)])
           ..limit(1))
         .getSingleOrNull();
+  }
+
+  /// 监听某本书某天的任务。
+  Stream<Task?> watchTaskForBookOnDate(int bookId, DateTime date) {
+    return (db.select(db.tasks)
+          ..where((t) =>
+              t.bookId.equals(bookId) &
+              t.date.equals(dateOnly(date)) &
+              t.status.isNotValue('skipped'))
+          ..orderBy([(t) => OrderingTerm.asc(t.id)])
+          ..limit(1))
+        .watchSingleOrNull();
+  }
+
+  /// 某本书某天累计读了多少页。
+  Future<int> pagesReadOn(int bookId, DateTime date) async {
+    final d = dateOnly(date);
+    final sessions = await (db.select(db.readingSessions)
+          ..where((t) =>
+              t.bookId.equals(bookId) &
+              t.startedAt.isBiggerOrEqualValue(d) &
+              t.startedAt.isSmallerThanValue(addDays(d, 1))))
+        .get();
+    var total = 0;
+    for (final s in sessions) {
+      total += s.pagesRead ?? 0;
+    }
+    return total;
   }
 
   /// 根据该书所有计时记录重算自动学习速度。
