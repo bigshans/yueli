@@ -8,7 +8,8 @@ plugins {
 android {
     namespace = "com.example.reader_management"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // 插件的原生库要求 NDK 27。
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         // flutter_local_notifications 需要 core library desugaring。
