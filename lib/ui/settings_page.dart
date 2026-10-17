@@ -47,19 +47,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 
   Future<void> _pickTargetApp() async {
-    final apps = await TargetAppService.installedApps();
-    if (!mounted) return;
-    if (apps.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('没有找到可启动的应用（仅安卓可用）')),
-      );
-      return;
-    }
     final selected = await showModalBottomSheet<AppInfo>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
-      builder: (context) => _AppPickerSheet(apps: apps),
+      builder: (context) => const _AppPickerSheet(),
     );
     if (selected == null) return;
     await ref.read(repositoryProvider).updateAutoOpenApp(
@@ -224,10 +216,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   }
 }
 
-/// 已安装应用选择器（带搜索）。
+/// 已安装应用选择器（带搜索与加载动画）。
 class _AppPickerSheet extends StatefulWidget {
-  const _AppPickerSheet({required this.apps});
-  final List<AppInfo> apps;
+  const _AppPickerSheet();
 
   @override
   State<_AppPickerSheet> createState() => _AppPickerSheetState();
@@ -236,6 +227,19 @@ class _AppPickerSheet extends StatefulWidget {
 class _AppPickerSheetState extends State<_AppPickerSheet> {
   final _search = TextEditingController();
   String _query = '';
+  List<AppInfo>? _apps;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final apps = await TargetAppService.installedApps();
+    if (!mounted) return;
+    setState(() => _apps = apps);
+  }
 
   @override
   void dispose() {
@@ -245,58 +249,81 @@ class _AppPickerSheetState extends State<_AppPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final q = _query.trim().toLowerCase();
-    final filtered = q.isEmpty
-        ? widget.apps
-        : widget.apps
-            .where((a) => a.name.toLowerCase().contains(q))
-            .toList();
+    final apps = _apps;
 
     return SizedBox(
       height: MediaQuery.of(context).size.height * 0.72,
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-            child: TextField(
-              controller: _search,
-              decoration: const InputDecoration(
-                hintText: '搜索应用',
-                prefixIcon: Icon(Icons.search),
-                isDense: true,
-                border: OutlineInputBorder(),
+      child: apps == null
+          ? const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('正在读取已安装应用…'),
+                ],
               ),
-              onChanged: (v) => setState(() => _query = v),
-            ),
-          ),
-          Expanded(
-            child: filtered.isEmpty
-                ? const Center(child: Text('没有匹配的应用'))
-                : ListView.builder(
-                    itemCount: filtered.length,
-                    itemBuilder: (context, i) {
-                      final app = filtered[i];
-                      return ListTile(
-                        leading: SizedBox(
-                          width: 36,
-                          height: 36,
-                          child: app.icon == null
-                              ? const Icon(Icons.android)
-                              : Image.memory(app.icon!, fit: BoxFit.contain),
-                        ),
-                        title: Text(app.name),
-                        subtitle: Text(
-                          app.packageName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        onTap: () => Navigator.pop(context, app),
+            )
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: TextField(
+                    controller: _search,
+                    decoration: const InputDecoration(
+                      hintText: '搜索应用',
+                      prefixIcon: Icon(Icons.search),
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (v) =>
+                        setState(() => _query = v.trim().toLowerCase()),
+                  ),
+                ),
+                Expanded(
+                  child: Builder(
+                    builder: (context) {
+                      final filtered = _query.isEmpty
+                          ? apps
+                          : apps
+                              .where((a) =>
+                                  a.name.toLowerCase().contains(_query))
+                              .toList();
+                      if (filtered.isEmpty) {
+                        return Center(
+                          child: Text(apps.isEmpty
+                              ? '没有找到可启动的应用'
+                              : '没有匹配的应用'),
+                        );
+                      }
+                      return ListView.builder(
+                        itemCount: filtered.length,
+                        itemBuilder: (context, i) {
+                          final app = filtered[i];
+                          return ListTile(
+                            leading: SizedBox(
+                              width: 36,
+                              height: 36,
+                              child: app.icon == null
+                                  ? const Icon(Icons.android)
+                                  : Image.memory(app.icon!,
+                                      fit: BoxFit.contain),
+                            ),
+                            title: Text(app.name),
+                            subtitle: Text(
+                              app.packageName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            onTap: () => Navigator.pop(context, app),
+                          );
+                        },
                       );
                     },
                   ),
-          ),
-        ],
-      ),
+                ),
+              ],
+            ),
     );
   }
 }
