@@ -49,16 +49,16 @@ Future<void> startFreeTimer(BuildContext context, WidgetRef ref) async {
   );
 }
 
-/// 为当前计时选择书本。返回是否已选中。
-Future<bool> pickBookForTimer(BuildContext context, WidgetRef ref) async {
+/// 为当前计时选择书本。返回选中的书（取消则 null）。
+Future<Book?> pickBookForTimer(BuildContext context, WidgetRef ref) async {
   final repo = ref.read(repositoryProvider);
   final books = await repo.allBooks();
-  if (!context.mounted) return false;
+  if (!context.mounted) return null;
   if (books.isEmpty) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('还没有读物，请先在书架添加')),
     );
-    return false;
+    return null;
   }
   final selected = await showModalBottomSheet<Book>(
     context: context,
@@ -82,9 +82,9 @@ Future<bool> pickBookForTimer(BuildContext context, WidgetRef ref) async {
       ),
     ),
   );
-  if (selected == null) return false;
+  if (selected == null) return null;
   await repo.setTimerBook(selected.id);
-  return true;
+  return selected;
 }
 
 /// 打开专注计时页。
@@ -102,24 +102,36 @@ Future<void> showStopTimerDialog(
   final initial = ref.read(activeTimerProvider);
   if (initial == null) return;
   final repo = ref.read(repositoryProvider);
+
+  // 点「结束」立即暂停，冻结本次用时（选书/确认期间不再计时）。
+  final now = DateTime.now();
+  final wasRunning = initial.isRunning;
+  if (wasRunning) await repo.pauseTimer(now: now);
+  final elapsed = initial.elapsedSecondsAt(now);
+
   // 先计时后选书：结束前必须指定书本。
-  var timer = initial;
-  if (timer.bookId == null) {
-    await pickBookForTimer(context, ref);
+  var bookId = initial.bookId;
+  if (bookId == null) {
     if (!context.mounted) return;
-    final updated = ref.read(activeTimerProvider);
-    if (updated == null || updated.bookId == null) return;
-    timer = updated;
+    final selected = await pickBookForTimer(context, ref);
+    if (selected == null) {
+      // 取消选书：恢复计时。
+      if (wasRunning) await repo.resumeTimer();
+      return;
+    }
+    bookId = selected.id;
   }
+
   final boundTask =
-      timer.taskId == null ? null : await repo.getTask(timer.taskId!);
+      initial.taskId == null ? null : await repo.getTask(initial.taskId!);
   // 自由计时时，归到今天这本书的任务，这样时长也能计进去。
-  final task = boundTask ??
-      await repo.taskForBookOnDate(timer.bookId!, DateTime.now());
+  final task = boundTask ?? await repo.taskForBookOnDate(bookId, now);
   final attributed = boundTask == null && task != null;
-  final book = await repo.getBook(timer.bookId!);
-  final elapsed = timer.elapsedSecondsAt(DateTime.now());
-  if (!context.mounted) return;
+  final book = await repo.getBook(bookId);
+  if (!context.mounted) {
+    if (wasRunning) await repo.resumeTimer();
+    return;
+  }
 
   final pageController = TextEditingController(
     text: (task?.endPage ?? book?.currentPage)?.toString() ?? '',
@@ -190,9 +202,17 @@ Future<void> showStopTimerDialog(
     await repo.cancelTimer();
     return;
   }
-  if (result != 'save') return;
+  if (result != 'save') {
+    // 取消对话框：恢复计时。
+    if (wasRunning) await repo.resumeTimer();
+    return;
+  }
   final reached = int.tryParse(pageController.text.trim());
-  await repo.stopTimer(reachedPage: reached, completeTask: completeTask);
+  await repo.stopTimer(
+    reachedPage: reached,
+    completeTask: completeTask,
+    fallbackBookId: bookId,
+  );
 }
 
 InputDecoration _pageField(Book? book) => InputDecoration(
