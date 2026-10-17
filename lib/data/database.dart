@@ -13,7 +13,7 @@ class AppDatabase extends _$AppDatabase {
   static QueryExecutor _open() => driftDatabase(name: 'reader_management');
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -58,6 +58,13 @@ class AppDatabase extends _$AppDatabase {
                 startedAt: b.createdAt,
               ));
             }
+          }
+          if (from < 9) {
+            await m.addColumn(readings, readings.completed);
+            // 已有结束时间的旧记录视为已完成。
+            await (update(readings)
+                  ..where((t) => t.finishedAt.isNotNull()))
+                .write(const ReadingsCompanion(completed: Value(true)));
           }
         },
         beforeOpen: (details) async {

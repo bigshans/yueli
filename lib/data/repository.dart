@@ -183,7 +183,7 @@ class ReadingRepository {
     if (book != null &&
         book.totalPages > 0 &&
         book.currentPage >= book.totalPages) {
-      await _finishRound(id, book.round);
+      await _finishRound(id, book.round, completed: true);
     }
   }
 
@@ -220,13 +220,17 @@ class ReadingRepository {
     if (plan != null) await reschedulePlan(plan.id);
   }
 
-  Future<void> _finishRound(int bookId, int round, {DateTime? at}) async {
+  Future<void> _finishRound(int bookId, int round,
+      {DateTime? at, bool completed = false}) async {
     await (db.update(db.readings)
           ..where((t) =>
               t.bookId.equals(bookId) &
               t.round.equals(round) &
               t.finishedAt.isNull()))
-        .write(ReadingsCompanion(finishedAt: Value(at ?? DateTime.now())));
+        .write(ReadingsCompanion(
+          finishedAt: Value(at ?? DateTime.now()),
+          completed: Value(completed),
+        ));
   }
 
   /// 该书的有效阅读速度。
@@ -377,7 +381,7 @@ class ReadingRepository {
 
     final completed = book.currentPage >= book.totalPages;
     if (completed) {
-      await _finishRound(book.id, book.round);
+      await _finishRound(book.id, book.round, completed: true);
     }
     await (db.update(db.plans)..where((t) => t.id.equals(planId))).write(
       PlansCompanion(

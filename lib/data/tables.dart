@@ -105,6 +105,9 @@ class Readings extends Table {
   IntColumn get round => integer()();
   DateTimeColumn get startedAt => dateTime()();
   DateTimeColumn get finishedAt => dateTime().nullable()();
+
+  /// 这一遍是否读完了（中途开始重读则为 false）。
+  BoolColumn get completed => boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt =>
       dateTime().withDefault(currentDateAndTime)();
 }

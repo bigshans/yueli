@@ -668,8 +668,6 @@ class _ReadingRounds extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final readingsAsync = ref.watch(readingsProvider(book.id));
     final sessions =
         ref.watch(sessionsProvider(book.id)).valueOrNull ?? const [];
@@ -695,18 +693,11 @@ class _ReadingRounds extends ConsumerWidget {
           children: [
             for (final r in readings) _row(context, r, totals[r.round]),
             const SizedBox(height: 8),
-            if (finished)
-              FilledButton.tonalIcon(
-                onPressed: () => _confirmReread(context, ref),
-                icon: const Icon(Icons.replay),
-                label: Text('开始重读（第 ${book.round + 1} 遍）'),
-              )
-            else
-              Text(
-                '这一遍读完后可以开始重读。',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: scheme.onSurfaceVariant),
-              ),
+            FilledButton.tonalIcon(
+              onPressed: () => _confirmReread(context, ref, finished: finished),
+              icon: const Icon(Icons.replay),
+              label: Text('开始重读（第 ${book.round + 1} 遍）'),
+            ),
           ],
         );
       },
@@ -718,6 +709,9 @@ class _ReadingRounds extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final isCurrent = r.round == book.round;
     final active = isCurrent && r.finishedAt == null;
+    final status = active
+        ? '（进行中）'
+        : (r.completed ? '（已完成）' : '（未读完）');
     final range = r.finishedAt == null
         ? '${formatDate(r.startedAt)} 起'
         : '${formatDate(r.startedAt)} ~ ${formatDate(r.finishedAt!)}';
@@ -744,7 +738,7 @@ class _ReadingRounds extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '第 ${r.round} 遍${active ? '（进行中）' : ''}',
+                  '第 ${r.round} 遍$status',
                   style: const TextStyle(
                       fontWeight: FontWeight.w600, fontSize: 13),
                 ),
@@ -761,12 +755,18 @@ class _ReadingRounds extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmReread(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmReread(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool finished,
+  }) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('开始重读《${book.title}》？'),
-        content: const Text('会开始新的一遍，进度重置为第 1 页；之前的阅读记录会保留。'),
+        content: Text(finished
+            ? '会开始新的一遍，进度重置为第 1 页；之前的阅读记录会保留。'
+            : '这一遍还没读完。开始重读会把这一遍记为「未读完」，进度重置为第 1 页；之前的记录会保留。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

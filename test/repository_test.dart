@@ -477,6 +477,7 @@ void main() {
     expect(readings.length, 1);
     expect(readings.single.round, 1);
     expect(readings.single.finishedAt, isNotNull);
+    expect(readings.single.completed, isTrue);
 
     await repo.startReread(id);
     final book = await repo.getBook(id);
@@ -485,6 +486,24 @@ void main() {
 
     readings = await repo.watchReadings(id).first;
     expect(readings.length, 2);
+    expect(readings.last.round, 2);
+    expect(readings.last.finishedAt, isNull);
+  });
+
+  test('未读完也能重读，旧轮次标为未读完', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.updateBook(id, const BooksCompanion(currentPage: Value(30)));
+
+    await repo.startReread(id);
+
+    final book = await repo.getBook(id);
+    expect(book!.round, 2);
+    expect(book.currentPage, 0);
+    final readings = await repo.watchReadings(id).first;
+    expect(readings.length, 2);
+    expect(readings.first.round, 1);
+    expect(readings.first.finishedAt, isNotNull);
+    expect(readings.first.completed, isFalse);
     expect(readings.last.round, 2);
     expect(readings.last.finishedAt, isNull);
   });

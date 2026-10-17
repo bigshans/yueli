@@ -2514,6 +2514,21 @@ class $ReadingsTable extends Readings with TableInfo<$ReadingsTable, Reading> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _completedMeta = const VerificationMeta(
+    'completed',
+  );
+  @override
+  late final GeneratedColumn<bool> completed = GeneratedColumn<bool>(
+    'completed',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("completed" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -2533,6 +2548,7 @@ class $ReadingsTable extends Readings with TableInfo<$ReadingsTable, Reading> {
     round,
     startedAt,
     finishedAt,
+    completed,
     createdAt,
   ];
   @override
@@ -2580,6 +2596,12 @@ class $ReadingsTable extends Readings with TableInfo<$ReadingsTable, Reading> {
         finishedAt.isAcceptableOrUnknown(data['finished_at']!, _finishedAtMeta),
       );
     }
+    if (data.containsKey('completed')) {
+      context.handle(
+        _completedMeta,
+        completed.isAcceptableOrUnknown(data['completed']!, _completedMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -2615,6 +2637,10 @@ class $ReadingsTable extends Readings with TableInfo<$ReadingsTable, Reading> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}finished_at'],
       ),
+      completed: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}completed'],
+      )!,
       createdAt: attachedDatabase.typeMapping.read(
         DriftSqlType.dateTime,
         data['${effectivePrefix}created_at'],
@@ -2634,6 +2660,9 @@ class Reading extends DataClass implements Insertable<Reading> {
   final int round;
   final DateTime startedAt;
   final DateTime? finishedAt;
+
+  /// 这一遍是否读完了（中途开始重读则为 false）。
+  final bool completed;
   final DateTime createdAt;
   const Reading({
     required this.id,
@@ -2641,6 +2670,7 @@ class Reading extends DataClass implements Insertable<Reading> {
     required this.round,
     required this.startedAt,
     this.finishedAt,
+    required this.completed,
     required this.createdAt,
   });
   @override
@@ -2653,6 +2683,7 @@ class Reading extends DataClass implements Insertable<Reading> {
     if (!nullToAbsent || finishedAt != null) {
       map['finished_at'] = Variable<DateTime>(finishedAt);
     }
+    map['completed'] = Variable<bool>(completed);
     map['created_at'] = Variable<DateTime>(createdAt);
     return map;
   }
@@ -2666,6 +2697,7 @@ class Reading extends DataClass implements Insertable<Reading> {
       finishedAt: finishedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(finishedAt),
+      completed: Value(completed),
       createdAt: Value(createdAt),
     );
   }
@@ -2681,6 +2713,7 @@ class Reading extends DataClass implements Insertable<Reading> {
       round: serializer.fromJson<int>(json['round']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
       finishedAt: serializer.fromJson<DateTime?>(json['finishedAt']),
+      completed: serializer.fromJson<bool>(json['completed']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
     );
   }
@@ -2693,6 +2726,7 @@ class Reading extends DataClass implements Insertable<Reading> {
       'round': serializer.toJson<int>(round),
       'startedAt': serializer.toJson<DateTime>(startedAt),
       'finishedAt': serializer.toJson<DateTime?>(finishedAt),
+      'completed': serializer.toJson<bool>(completed),
       'createdAt': serializer.toJson<DateTime>(createdAt),
     };
   }
@@ -2703,6 +2737,7 @@ class Reading extends DataClass implements Insertable<Reading> {
     int? round,
     DateTime? startedAt,
     Value<DateTime?> finishedAt = const Value.absent(),
+    bool? completed,
     DateTime? createdAt,
   }) => Reading(
     id: id ?? this.id,
@@ -2710,6 +2745,7 @@ class Reading extends DataClass implements Insertable<Reading> {
     round: round ?? this.round,
     startedAt: startedAt ?? this.startedAt,
     finishedAt: finishedAt.present ? finishedAt.value : this.finishedAt,
+    completed: completed ?? this.completed,
     createdAt: createdAt ?? this.createdAt,
   );
   Reading copyWithCompanion(ReadingsCompanion data) {
@@ -2721,6 +2757,7 @@ class Reading extends DataClass implements Insertable<Reading> {
       finishedAt: data.finishedAt.present
           ? data.finishedAt.value
           : this.finishedAt,
+      completed: data.completed.present ? data.completed.value : this.completed,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
     );
   }
@@ -2733,14 +2770,22 @@ class Reading extends DataClass implements Insertable<Reading> {
           ..write('round: $round, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt, ')
+          ..write('completed: $completed, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, bookId, round, startedAt, finishedAt, createdAt);
+  int get hashCode => Object.hash(
+    id,
+    bookId,
+    round,
+    startedAt,
+    finishedAt,
+    completed,
+    createdAt,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -2750,6 +2795,7 @@ class Reading extends DataClass implements Insertable<Reading> {
           other.round == this.round &&
           other.startedAt == this.startedAt &&
           other.finishedAt == this.finishedAt &&
+          other.completed == this.completed &&
           other.createdAt == this.createdAt);
 }
 
@@ -2759,6 +2805,7 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
   final Value<int> round;
   final Value<DateTime> startedAt;
   final Value<DateTime?> finishedAt;
+  final Value<bool> completed;
   final Value<DateTime> createdAt;
   const ReadingsCompanion({
     this.id = const Value.absent(),
@@ -2766,6 +2813,7 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
     this.round = const Value.absent(),
     this.startedAt = const Value.absent(),
     this.finishedAt = const Value.absent(),
+    this.completed = const Value.absent(),
     this.createdAt = const Value.absent(),
   });
   ReadingsCompanion.insert({
@@ -2774,6 +2822,7 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
     required int round,
     required DateTime startedAt,
     this.finishedAt = const Value.absent(),
+    this.completed = const Value.absent(),
     this.createdAt = const Value.absent(),
   }) : bookId = Value(bookId),
        round = Value(round),
@@ -2784,6 +2833,7 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
     Expression<int>? round,
     Expression<DateTime>? startedAt,
     Expression<DateTime>? finishedAt,
+    Expression<bool>? completed,
     Expression<DateTime>? createdAt,
   }) {
     return RawValuesInsertable({
@@ -2792,6 +2842,7 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
       if (round != null) 'round': round,
       if (startedAt != null) 'started_at': startedAt,
       if (finishedAt != null) 'finished_at': finishedAt,
+      if (completed != null) 'completed': completed,
       if (createdAt != null) 'created_at': createdAt,
     });
   }
@@ -2802,6 +2853,7 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
     Value<int>? round,
     Value<DateTime>? startedAt,
     Value<DateTime?>? finishedAt,
+    Value<bool>? completed,
     Value<DateTime>? createdAt,
   }) {
     return ReadingsCompanion(
@@ -2810,6 +2862,7 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
       round: round ?? this.round,
       startedAt: startedAt ?? this.startedAt,
       finishedAt: finishedAt ?? this.finishedAt,
+      completed: completed ?? this.completed,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -2832,6 +2885,9 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
     if (finishedAt.present) {
       map['finished_at'] = Variable<DateTime>(finishedAt.value);
     }
+    if (completed.present) {
+      map['completed'] = Variable<bool>(completed.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -2846,6 +2902,7 @@ class ReadingsCompanion extends UpdateCompanion<Reading> {
           ..write('round: $round, ')
           ..write('startedAt: $startedAt, ')
           ..write('finishedAt: $finishedAt, ')
+          ..write('completed: $completed, ')
           ..write('createdAt: $createdAt')
           ..write(')'))
         .toString();
@@ -6009,6 +6066,7 @@ typedef $$ReadingsTableCreateCompanionBuilder =
       required int round,
       required DateTime startedAt,
       Value<DateTime?> finishedAt,
+      Value<bool> completed,
       Value<DateTime> createdAt,
     });
 typedef $$ReadingsTableUpdateCompanionBuilder =
@@ -6018,6 +6076,7 @@ typedef $$ReadingsTableUpdateCompanionBuilder =
       Value<int> round,
       Value<DateTime> startedAt,
       Value<DateTime?> finishedAt,
+      Value<bool> completed,
       Value<DateTime> createdAt,
     });
 
@@ -6070,6 +6129,11 @@ class $$ReadingsTableFilterComposer
 
   ColumnFilters<DateTime> get finishedAt => $composableBuilder(
     column: $table.finishedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get completed => $composableBuilder(
+    column: $table.completed,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -6131,6 +6195,11 @@ class $$ReadingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get completed => $composableBuilder(
+    column: $table.completed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -6182,6 +6251,9 @@ class $$ReadingsTableAnnotationComposer
     column: $table.finishedAt,
     builder: (column) => column,
   );
+
+  GeneratedColumn<bool> get completed =>
+      $composableBuilder(column: $table.completed, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -6243,6 +6315,7 @@ class $$ReadingsTableTableManager
                 Value<int> round = const Value.absent(),
                 Value<DateTime> startedAt = const Value.absent(),
                 Value<DateTime?> finishedAt = const Value.absent(),
+                Value<bool> completed = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => ReadingsCompanion(
                 id: id,
@@ -6250,6 +6323,7 @@ class $$ReadingsTableTableManager
                 round: round,
                 startedAt: startedAt,
                 finishedAt: finishedAt,
+                completed: completed,
                 createdAt: createdAt,
               ),
           createCompanionCallback:
@@ -6259,6 +6333,7 @@ class $$ReadingsTableTableManager
                 required int round,
                 required DateTime startedAt,
                 Value<DateTime?> finishedAt = const Value.absent(),
+                Value<bool> completed = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
               }) => ReadingsCompanion.insert(
                 id: id,
@@ -6266,6 +6341,7 @@ class $$ReadingsTableTableManager
                 round: round,
                 startedAt: startedAt,
                 finishedAt: finishedAt,
+                completed: completed,
                 createdAt: createdAt,
               ),
           withReferenceMapper: (p0) => p0
