@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/date_x.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
+import 'widgets/slider_field.dart';
 import 'widgets/timer_banner.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
@@ -110,26 +112,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 .labelLarge
                 ?.copyWith(fontWeight: FontWeight.w600),
           ),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _minutes,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: '每天可投入时间',
-                    suffixText: '分钟',
-                    border: OutlineInputBorder(),
-                  ),
-                  onChanged: (v) {
-                    final n = int.tryParse(v.trim());
-                    if (n != null && n > 0) {
-                      setState(() => _dailyMinutes = n);
-                    }
-                  },
-                ),
-              ),
-            ],
+          SliderField(
+            value: _dailyMinutes,
+            min: 5,
+            max: 240,
+            unit: '分钟',
+            controller: _minutes,
+            onValue: (n) => setState(() => _dailyMinutes = n),
+            format: formatMinutes,
           ),
           const SizedBox(height: 24),
           Text(

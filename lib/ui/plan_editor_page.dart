@@ -8,6 +8,7 @@ import '../data/database.dart';
 import '../data/repository.dart';
 import '../domain/scheduling/scheduler.dart';
 import '../state/providers.dart';
+import 'widgets/slider_field.dart';
 import 'widgets/timer_banner.dart';
 
 class PlanEditorPage extends ConsumerStatefulWidget {
@@ -145,7 +146,7 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
         if (_byPages) ...[
           _label('每天读多少页'),
           const SizedBox(height: 4),
-          _SliderField(
+          SliderField(
             value: _dailyPages,
             min: 1,
             max: 200,
@@ -162,7 +163,7 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
         ] else ...[
           _label('每天可投入时间'),
           const SizedBox(height: 4),
-          _SliderField(
+          SliderField(
             value: _dailyMinutes,
             min: 5,
             max: 240,
@@ -402,68 +403,6 @@ class _PreviewCard extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-/// 滑块 + 数字输入框联动：拖动改数值，输入框同步；输入也反过来更新滑块。
-class _SliderField extends StatelessWidget {
-  const _SliderField({
-    required this.value,
-    required this.min,
-    required this.max,
-    required this.unit,
-    required this.controller,
-    required this.onValue,
-    this.format,
-  });
-
-  final int value;
-  final int min;
-  final int max;
-  final String unit;
-  final TextEditingController controller;
-  final ValueChanged<int> onValue;
-  final String Function(int)? format;
-
-  @override
-  Widget build(BuildContext context) {
-    final sliderValue = value.toDouble().clamp(min.toDouble(), max.toDouble());
-    return Row(
-      children: [
-        Expanded(
-          child: Slider(
-            value: sliderValue,
-            min: min.toDouble(),
-            max: max.toDouble(),
-            divisions: max - min,
-            label: format?.call(value) ?? '$value $unit',
-            onChanged: (v) {
-              final n = v.round();
-              controller.text = '$n';
-              onValue(n);
-            },
-          ),
-        ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 104,
-          child: TextField(
-            controller: controller,
-            keyboardType: TextInputType.number,
-            textAlign: TextAlign.center,
-            decoration: InputDecoration(
-              suffixText: unit,
-              isDense: true,
-              border: const OutlineInputBorder(),
-            ),
-            onChanged: (v) {
-              final n = int.tryParse(v.trim());
-              if (n != null && n > 0) onValue(n);
-            },
-          ),
-        ),
-      ],
     );
   }
 }
