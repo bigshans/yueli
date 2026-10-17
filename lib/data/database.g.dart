@@ -3313,6 +3313,43 @@ class $AppSettingsTable extends AppSettings
         requiredDuringInsert: false,
         defaultValue: const Constant(0),
       );
+  static const VerificationMeta _autoOpenAppMeta = const VerificationMeta(
+    'autoOpenApp',
+  );
+  @override
+  late final GeneratedColumn<bool> autoOpenApp = GeneratedColumn<bool>(
+    'auto_open_app',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("auto_open_app" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _autoOpenPackageMeta = const VerificationMeta(
+    'autoOpenPackage',
+  );
+  @override
+  late final GeneratedColumn<String> autoOpenPackage = GeneratedColumn<String>(
+    'auto_open_package',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _autoOpenAppNameMeta = const VerificationMeta(
+    'autoOpenAppName',
+  );
+  @override
+  late final GeneratedColumn<String> autoOpenAppName = GeneratedColumn<String>(
+    'auto_open_app_name',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     id,
@@ -3324,6 +3361,9 @@ class $AppSettingsTable extends AppSettings
     activeStartedAt,
     activeRunningSince,
     activeAccumulatedSeconds,
+    autoOpenApp,
+    autoOpenPackage,
+    autoOpenAppName,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -3412,6 +3452,33 @@ class $AppSettingsTable extends AppSettings
         ),
       );
     }
+    if (data.containsKey('auto_open_app')) {
+      context.handle(
+        _autoOpenAppMeta,
+        autoOpenApp.isAcceptableOrUnknown(
+          data['auto_open_app']!,
+          _autoOpenAppMeta,
+        ),
+      );
+    }
+    if (data.containsKey('auto_open_package')) {
+      context.handle(
+        _autoOpenPackageMeta,
+        autoOpenPackage.isAcceptableOrUnknown(
+          data['auto_open_package']!,
+          _autoOpenPackageMeta,
+        ),
+      );
+    }
+    if (data.containsKey('auto_open_app_name')) {
+      context.handle(
+        _autoOpenAppNameMeta,
+        autoOpenAppName.isAcceptableOrUnknown(
+          data['auto_open_app_name']!,
+          _autoOpenAppNameMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -3457,6 +3524,18 @@ class $AppSettingsTable extends AppSettings
         DriftSqlType.int,
         data['${effectivePrefix}active_accumulated_seconds'],
       )!,
+      autoOpenApp: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}auto_open_app'],
+      )!,
+      autoOpenPackage: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}auto_open_package'],
+      ),
+      autoOpenAppName: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}auto_open_app_name'],
+      ),
     );
   }
 
@@ -3486,6 +3565,11 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
 
   /// 暂停前已累计的秒数。
   final int activeAccumulatedSeconds;
+
+  /// 安卓端：计时开始时自动打开指定应用。
+  final bool autoOpenApp;
+  final String? autoOpenPackage;
+  final String? autoOpenAppName;
   const AppSetting({
     required this.id,
     required this.pagesPerHour,
@@ -3496,6 +3580,9 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
     this.activeStartedAt,
     this.activeRunningSince,
     required this.activeAccumulatedSeconds,
+    required this.autoOpenApp,
+    this.autoOpenPackage,
+    this.autoOpenAppName,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -3517,6 +3604,13 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
       map['active_running_since'] = Variable<DateTime>(activeRunningSince);
     }
     map['active_accumulated_seconds'] = Variable<int>(activeAccumulatedSeconds);
+    map['auto_open_app'] = Variable<bool>(autoOpenApp);
+    if (!nullToAbsent || autoOpenPackage != null) {
+      map['auto_open_package'] = Variable<String>(autoOpenPackage);
+    }
+    if (!nullToAbsent || autoOpenAppName != null) {
+      map['auto_open_app_name'] = Variable<String>(autoOpenAppName);
+    }
     return map;
   }
 
@@ -3539,6 +3633,13 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
           ? const Value.absent()
           : Value(activeRunningSince),
       activeAccumulatedSeconds: Value(activeAccumulatedSeconds),
+      autoOpenApp: Value(autoOpenApp),
+      autoOpenPackage: autoOpenPackage == null && nullToAbsent
+          ? const Value.absent()
+          : Value(autoOpenPackage),
+      autoOpenAppName: autoOpenAppName == null && nullToAbsent
+          ? const Value.absent()
+          : Value(autoOpenAppName),
     );
   }
 
@@ -3563,6 +3664,9 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
       activeAccumulatedSeconds: serializer.fromJson<int>(
         json['activeAccumulatedSeconds'],
       ),
+      autoOpenApp: serializer.fromJson<bool>(json['autoOpenApp']),
+      autoOpenPackage: serializer.fromJson<String?>(json['autoOpenPackage']),
+      autoOpenAppName: serializer.fromJson<String?>(json['autoOpenAppName']),
     );
   }
   @override
@@ -3580,6 +3684,9 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
       'activeAccumulatedSeconds': serializer.toJson<int>(
         activeAccumulatedSeconds,
       ),
+      'autoOpenApp': serializer.toJson<bool>(autoOpenApp),
+      'autoOpenPackage': serializer.toJson<String?>(autoOpenPackage),
+      'autoOpenAppName': serializer.toJson<String?>(autoOpenAppName),
     };
   }
 
@@ -3593,6 +3700,9 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
     Value<DateTime?> activeStartedAt = const Value.absent(),
     Value<DateTime?> activeRunningSince = const Value.absent(),
     int? activeAccumulatedSeconds,
+    bool? autoOpenApp,
+    Value<String?> autoOpenPackage = const Value.absent(),
+    Value<String?> autoOpenAppName = const Value.absent(),
   }) => AppSetting(
     id: id ?? this.id,
     pagesPerHour: pagesPerHour ?? this.pagesPerHour,
@@ -3608,6 +3718,13 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
         : this.activeRunningSince,
     activeAccumulatedSeconds:
         activeAccumulatedSeconds ?? this.activeAccumulatedSeconds,
+    autoOpenApp: autoOpenApp ?? this.autoOpenApp,
+    autoOpenPackage: autoOpenPackage.present
+        ? autoOpenPackage.value
+        : this.autoOpenPackage,
+    autoOpenAppName: autoOpenAppName.present
+        ? autoOpenAppName.value
+        : this.autoOpenAppName,
   );
   AppSetting copyWithCompanion(AppSettingsCompanion data) {
     return AppSetting(
@@ -3636,6 +3753,15 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
       activeAccumulatedSeconds: data.activeAccumulatedSeconds.present
           ? data.activeAccumulatedSeconds.value
           : this.activeAccumulatedSeconds,
+      autoOpenApp: data.autoOpenApp.present
+          ? data.autoOpenApp.value
+          : this.autoOpenApp,
+      autoOpenPackage: data.autoOpenPackage.present
+          ? data.autoOpenPackage.value
+          : this.autoOpenPackage,
+      autoOpenAppName: data.autoOpenAppName.present
+          ? data.autoOpenAppName.value
+          : this.autoOpenAppName,
     );
   }
 
@@ -3650,7 +3776,10 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
           ..write('activeTaskId: $activeTaskId, ')
           ..write('activeStartedAt: $activeStartedAt, ')
           ..write('activeRunningSince: $activeRunningSince, ')
-          ..write('activeAccumulatedSeconds: $activeAccumulatedSeconds')
+          ..write('activeAccumulatedSeconds: $activeAccumulatedSeconds, ')
+          ..write('autoOpenApp: $autoOpenApp, ')
+          ..write('autoOpenPackage: $autoOpenPackage, ')
+          ..write('autoOpenAppName: $autoOpenAppName')
           ..write(')'))
         .toString();
   }
@@ -3666,6 +3795,9 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
     activeStartedAt,
     activeRunningSince,
     activeAccumulatedSeconds,
+    autoOpenApp,
+    autoOpenPackage,
+    autoOpenAppName,
   );
   @override
   bool operator ==(Object other) =>
@@ -3679,7 +3811,10 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
           other.activeTaskId == this.activeTaskId &&
           other.activeStartedAt == this.activeStartedAt &&
           other.activeRunningSince == this.activeRunningSince &&
-          other.activeAccumulatedSeconds == this.activeAccumulatedSeconds);
+          other.activeAccumulatedSeconds == this.activeAccumulatedSeconds &&
+          other.autoOpenApp == this.autoOpenApp &&
+          other.autoOpenPackage == this.autoOpenPackage &&
+          other.autoOpenAppName == this.autoOpenAppName);
 }
 
 class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
@@ -3692,6 +3827,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
   final Value<DateTime?> activeStartedAt;
   final Value<DateTime?> activeRunningSince;
   final Value<int> activeAccumulatedSeconds;
+  final Value<bool> autoOpenApp;
+  final Value<String?> autoOpenPackage;
+  final Value<String?> autoOpenAppName;
   const AppSettingsCompanion({
     this.id = const Value.absent(),
     this.pagesPerHour = const Value.absent(),
@@ -3702,6 +3840,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     this.activeStartedAt = const Value.absent(),
     this.activeRunningSince = const Value.absent(),
     this.activeAccumulatedSeconds = const Value.absent(),
+    this.autoOpenApp = const Value.absent(),
+    this.autoOpenPackage = const Value.absent(),
+    this.autoOpenAppName = const Value.absent(),
   });
   AppSettingsCompanion.insert({
     this.id = const Value.absent(),
@@ -3713,6 +3854,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     this.activeStartedAt = const Value.absent(),
     this.activeRunningSince = const Value.absent(),
     this.activeAccumulatedSeconds = const Value.absent(),
+    this.autoOpenApp = const Value.absent(),
+    this.autoOpenPackage = const Value.absent(),
+    this.autoOpenAppName = const Value.absent(),
   });
   static Insertable<AppSetting> custom({
     Expression<int>? id,
@@ -3724,6 +3868,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     Expression<DateTime>? activeStartedAt,
     Expression<DateTime>? activeRunningSince,
     Expression<int>? activeAccumulatedSeconds,
+    Expression<bool>? autoOpenApp,
+    Expression<String>? autoOpenPackage,
+    Expression<String>? autoOpenAppName,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3738,6 +3885,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
         'active_running_since': activeRunningSince,
       if (activeAccumulatedSeconds != null)
         'active_accumulated_seconds': activeAccumulatedSeconds,
+      if (autoOpenApp != null) 'auto_open_app': autoOpenApp,
+      if (autoOpenPackage != null) 'auto_open_package': autoOpenPackage,
+      if (autoOpenAppName != null) 'auto_open_app_name': autoOpenAppName,
     });
   }
 
@@ -3751,6 +3901,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     Value<DateTime?>? activeStartedAt,
     Value<DateTime?>? activeRunningSince,
     Value<int>? activeAccumulatedSeconds,
+    Value<bool>? autoOpenApp,
+    Value<String?>? autoOpenPackage,
+    Value<String?>? autoOpenAppName,
   }) {
     return AppSettingsCompanion(
       id: id ?? this.id,
@@ -3763,6 +3916,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
       activeRunningSince: activeRunningSince ?? this.activeRunningSince,
       activeAccumulatedSeconds:
           activeAccumulatedSeconds ?? this.activeAccumulatedSeconds,
+      autoOpenApp: autoOpenApp ?? this.autoOpenApp,
+      autoOpenPackage: autoOpenPackage ?? this.autoOpenPackage,
+      autoOpenAppName: autoOpenAppName ?? this.autoOpenAppName,
     );
   }
 
@@ -3800,6 +3956,15 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
         activeAccumulatedSeconds.value,
       );
     }
+    if (autoOpenApp.present) {
+      map['auto_open_app'] = Variable<bool>(autoOpenApp.value);
+    }
+    if (autoOpenPackage.present) {
+      map['auto_open_package'] = Variable<String>(autoOpenPackage.value);
+    }
+    if (autoOpenAppName.present) {
+      map['auto_open_app_name'] = Variable<String>(autoOpenAppName.value);
+    }
     return map;
   }
 
@@ -3814,7 +3979,10 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
           ..write('activeTaskId: $activeTaskId, ')
           ..write('activeStartedAt: $activeStartedAt, ')
           ..write('activeRunningSince: $activeRunningSince, ')
-          ..write('activeAccumulatedSeconds: $activeAccumulatedSeconds')
+          ..write('activeAccumulatedSeconds: $activeAccumulatedSeconds, ')
+          ..write('autoOpenApp: $autoOpenApp, ')
+          ..write('autoOpenPackage: $autoOpenPackage, ')
+          ..write('autoOpenAppName: $autoOpenAppName')
           ..write(')'))
         .toString();
   }
@@ -6715,6 +6883,9 @@ typedef $$AppSettingsTableCreateCompanionBuilder =
       Value<DateTime?> activeStartedAt,
       Value<DateTime?> activeRunningSince,
       Value<int> activeAccumulatedSeconds,
+      Value<bool> autoOpenApp,
+      Value<String?> autoOpenPackage,
+      Value<String?> autoOpenAppName,
     });
 typedef $$AppSettingsTableUpdateCompanionBuilder =
     AppSettingsCompanion Function({
@@ -6727,6 +6898,9 @@ typedef $$AppSettingsTableUpdateCompanionBuilder =
       Value<DateTime?> activeStartedAt,
       Value<DateTime?> activeRunningSince,
       Value<int> activeAccumulatedSeconds,
+      Value<bool> autoOpenApp,
+      Value<String?> autoOpenPackage,
+      Value<String?> autoOpenAppName,
     });
 
 class $$AppSettingsTableFilterComposer
@@ -6780,6 +6954,21 @@ class $$AppSettingsTableFilterComposer
 
   ColumnFilters<int> get activeAccumulatedSeconds => $composableBuilder(
     column: $table.activeAccumulatedSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get autoOpenApp => $composableBuilder(
+    column: $table.autoOpenApp,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get autoOpenPackage => $composableBuilder(
+    column: $table.autoOpenPackage,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get autoOpenAppName => $composableBuilder(
+    column: $table.autoOpenAppName,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -6837,6 +7026,21 @@ class $$AppSettingsTableOrderingComposer
     column: $table.activeAccumulatedSeconds,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<bool> get autoOpenApp => $composableBuilder(
+    column: $table.autoOpenApp,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get autoOpenPackage => $composableBuilder(
+    column: $table.autoOpenPackage,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get autoOpenAppName => $composableBuilder(
+    column: $table.autoOpenAppName,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$AppSettingsTableAnnotationComposer
@@ -6890,6 +7094,21 @@ class $$AppSettingsTableAnnotationComposer
     column: $table.activeAccumulatedSeconds,
     builder: (column) => column,
   );
+
+  GeneratedColumn<bool> get autoOpenApp => $composableBuilder(
+    column: $table.autoOpenApp,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get autoOpenPackage => $composableBuilder(
+    column: $table.autoOpenPackage,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get autoOpenAppName => $composableBuilder(
+    column: $table.autoOpenAppName,
+    builder: (column) => column,
+  );
 }
 
 class $$AppSettingsTableTableManager
@@ -6932,6 +7151,9 @@ class $$AppSettingsTableTableManager
                 Value<DateTime?> activeStartedAt = const Value.absent(),
                 Value<DateTime?> activeRunningSince = const Value.absent(),
                 Value<int> activeAccumulatedSeconds = const Value.absent(),
+                Value<bool> autoOpenApp = const Value.absent(),
+                Value<String?> autoOpenPackage = const Value.absent(),
+                Value<String?> autoOpenAppName = const Value.absent(),
               }) => AppSettingsCompanion(
                 id: id,
                 pagesPerHour: pagesPerHour,
@@ -6942,6 +7164,9 @@ class $$AppSettingsTableTableManager
                 activeStartedAt: activeStartedAt,
                 activeRunningSince: activeRunningSince,
                 activeAccumulatedSeconds: activeAccumulatedSeconds,
+                autoOpenApp: autoOpenApp,
+                autoOpenPackage: autoOpenPackage,
+                autoOpenAppName: autoOpenAppName,
               ),
           createCompanionCallback:
               ({
@@ -6954,6 +7179,9 @@ class $$AppSettingsTableTableManager
                 Value<DateTime?> activeStartedAt = const Value.absent(),
                 Value<DateTime?> activeRunningSince = const Value.absent(),
                 Value<int> activeAccumulatedSeconds = const Value.absent(),
+                Value<bool> autoOpenApp = const Value.absent(),
+                Value<String?> autoOpenPackage = const Value.absent(),
+                Value<String?> autoOpenAppName = const Value.absent(),
               }) => AppSettingsCompanion.insert(
                 id: id,
                 pagesPerHour: pagesPerHour,
@@ -6964,6 +7192,9 @@ class $$AppSettingsTableTableManager
                 activeStartedAt: activeStartedAt,
                 activeRunningSince: activeRunningSince,
                 activeAccumulatedSeconds: activeAccumulatedSeconds,
+                autoOpenApp: autoOpenApp,
+                autoOpenPackage: autoOpenPackage,
+                autoOpenAppName: autoOpenAppName,
               ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

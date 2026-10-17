@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database.dart';
+import '../../services/target_app_service.dart';
 import '../../state/providers.dart';
 import '../focus_timer_page.dart';
 
@@ -30,10 +31,20 @@ Future<void> startTimerFor(
     return;
   }
   await ref.read(repositoryProvider).startTimer(bookId: bookId, taskId: taskId);
+  await _maybeOpenTargetApp(ref);
   if (!context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute(builder: (_) => const FocusTimerPage()),
   );
+}
+
+/// 安卓端：按设置自动打开指定应用。
+Future<void> _maybeOpenTargetApp(WidgetRef ref) async {
+  final s = ref.read(settingsProvider).valueOrNull;
+  if (s == null || !s.autoOpenApp) return;
+  final pkg = s.autoOpenPackage;
+  if (pkg == null || pkg.isEmpty) return;
+  await TargetAppService.open(pkg);
 }
 
 /// 先开计时，书本之后再选。
@@ -43,6 +54,7 @@ Future<void> startFreeTimer(BuildContext context, WidgetRef ref) async {
     return;
   }
   await ref.read(repositoryProvider).startTimer();
+  await _maybeOpenTargetApp(ref);
   if (!context.mounted) return;
   await Navigator.of(context).push(
     MaterialPageRoute(builder: (_) => const FocusTimerPage()),

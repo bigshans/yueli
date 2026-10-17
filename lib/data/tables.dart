@@ -147,6 +147,11 @@ class AppSettings extends Table {
   IntColumn get activeAccumulatedSeconds =>
       integer().withDefault(const Constant(0))();
 
+  /// 安卓端：计时开始时自动打开指定应用。
+  BoolColumn get autoOpenApp => boolean().withDefault(const Constant(false))();
+  TextColumn get autoOpenPackage => text().nullable()();
+  TextColumn get autoOpenAppName => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

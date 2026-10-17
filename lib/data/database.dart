@@ -13,7 +13,7 @@ class AppDatabase extends _$AppDatabase {
   static QueryExecutor _open() => driftDatabase(name: 'reader_management');
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -65,6 +65,11 @@ class AppDatabase extends _$AppDatabase {
             await (update(readings)
                   ..where((t) => t.finishedAt.isNotNull()))
                 .write(const ReadingsCompanion(completed: Value(true)));
+          }
+          if (from < 10) {
+            await m.addColumn(appSettings, appSettings.autoOpenApp);
+            await m.addColumn(appSettings, appSettings.autoOpenPackage);
+            await m.addColumn(appSettings, appSettings.autoOpenAppName);
           }
         },
         beforeOpen: (details) async {

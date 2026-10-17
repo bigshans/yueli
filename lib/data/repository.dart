@@ -803,6 +803,24 @@ class ReadingRepository {
 
   // ---------- 设置 ----------
 
+  /// 设置「计时时自动打开指定应用」。
+  Future<void> updateAutoOpenApp({
+    bool? enabled,
+    String? packageName,
+    String? appName,
+  }) async {
+    await db.loadSettings();
+    await (db.update(db.appSettings)..where((t) => t.id.equals(1))).write(
+      AppSettingsCompanion(
+        autoOpenApp: enabled == null ? const Value.absent() : Value(enabled),
+        autoOpenPackage:
+            packageName == null ? const Value.absent() : Value(packageName),
+        autoOpenAppName:
+            appName == null ? const Value.absent() : Value(appName),
+      ),
+    );
+  }
+
   Future<void> updateSettings({
     int? pagesPerHour,
     int? defaultDailyMinutes,
