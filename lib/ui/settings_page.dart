@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/date_x.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'widgets/timer_banner.dart';
@@ -15,6 +14,7 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _pace = TextEditingController(text: '30');
+  final _minutes = TextEditingController(text: '30');
   int _dailyMinutes = 30;
   Set<int> _weekdays = {1, 2, 3, 4, 5, 6, 7};
   bool _seeded = false;
@@ -29,6 +29,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       setState(() {
         _pace.text = s.pagesPerHour.toString();
         _dailyMinutes = s.defaultDailyMinutes;
+        _minutes.text = '$_dailyMinutes';
         _weekdays = parseWeekdays(s.defaultWeekdays);
       });
     }, fireImmediately: true);
@@ -37,6 +38,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   @override
   void dispose() {
     _pace.dispose();
+    _minutes.dispose();
     super.dispose();
   }
 
@@ -48,9 +50,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       );
       return;
     }
+    final minutes = int.tryParse(_minutes.text.trim());
+    if (minutes == null || minutes <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('每天时长需要是正整数')),
+      );
+      return;
+    }
     await ref.read(repositoryProvider).updateSettings(
           pagesPerHour: pace,
-          defaultDailyMinutes: _dailyMinutes,
+          defaultDailyMinutes: minutes,
           defaultWeekdays: encodeWeekdays(_weekdays),
         );
     if (mounted) {
@@ -104,21 +113,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           Row(
             children: [
               Expanded(
-                child: Slider(
-                  value: _dailyMinutes.toDouble(),
-                  min: 10,
-                  max: 180,
-                  divisions: 34,
-                  label: formatMinutes(_dailyMinutes),
-                  onChanged: (v) => setState(() => _dailyMinutes = v.round()),
-                ),
-              ),
-              SizedBox(
-                width: 80,
-                child: Text(
-                  formatMinutes(_dailyMinutes),
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
+                child: TextField(
+                  controller: _minutes,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: '每天可投入时间',
+                    suffixText: '分钟',
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (v) {
+                    final n = int.tryParse(v.trim());
+                    if (n != null && n > 0) {
+                      setState(() => _dailyMinutes = n);
+                    }
+                  },
                 ),
               ),
             ],

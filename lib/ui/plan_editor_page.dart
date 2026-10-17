@@ -26,6 +26,8 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
   late bool _noDeadline;
   late bool _byPages;
   late Set<int> _weekdays;
+  late final TextEditingController _minutesCtrl;
+  late final TextEditingController _pagesCtrl;
   bool _seeded = false;
 
   @override
@@ -39,6 +41,8 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
     _dailyPages = p?.dailyPages ?? 20;
     _weekdays =
         p != null ? parseWeekdays(p.weekdays) : {1, 2, 3, 4, 5, 6, 7};
+    _minutesCtrl = TextEditingController(text: _dailyMinutes.toString());
+    _pagesCtrl = TextEditingController(text: _dailyPages.toString());
 
     if (p == null) {
       // 新建排期：拿到全局默认设置后填充一次表单。
@@ -50,9 +54,18 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
           _dailyMinutes = s.defaultDailyMinutes;
           _dailyPages = max(1, (s.pagesPerHour * s.defaultDailyMinutes / 60).floor());
           _weekdays = parseWeekdays(s.defaultWeekdays);
+          _minutesCtrl.text = '$_dailyMinutes';
+          _pagesCtrl.text = '$_dailyPages';
         });
       }, fireImmediately: true);
     }
+  }
+
+  @override
+  void dispose() {
+    _minutesCtrl.dispose();
+    _pagesCtrl.dispose();
+    super.dispose();
   }
 
   @override
@@ -131,28 +144,34 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
         const SizedBox(height: 20),
         if (_byPages) ...[
           _label('每天读多少页'),
-          Row(
+          const SizedBox(height: 8),
+          TextField(
+            controller: _pagesCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              suffixText: '页',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (v) {
+              final n = int.tryParse(v.trim());
+              if (n != null && n > 0) setState(() => _dailyPages = n);
+            },
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
             children: [
-              Expanded(
-                child: Slider(
-                  value: _dailyPages.toDouble().clamp(1, 200),
-                  min: 1,
-                  max: 200,
-                  divisions: 199,
-                  label: '$_dailyPages 页',
-                  onChanged: (v) => setState(() => _dailyPages = v.round()),
+              for (final v in const [10, 20, 30, 50])
+                ActionChip(
+                  label: Text('$v 页'),
+                  onPressed: () => setState(() {
+                    _dailyPages = v;
+                    _pagesCtrl.text = '$v';
+                  }),
                 ),
-              ),
-              SizedBox(
-                width: 76,
-                child: Text(
-                  '$_dailyPages 页',
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
             ],
           ),
+          const SizedBox(height: 8),
           Text(
             '约 ${formatMinutes((_dailyPages / pace * 60).ceil())} / 天（按时长估算，仅供参考）',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -161,26 +180,31 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
           ),
         ] else ...[
           _label('每天可投入时间'),
-          Row(
+          const SizedBox(height: 8),
+          TextField(
+            controller: _minutesCtrl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              suffixText: '分钟',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (v) {
+              final n = int.tryParse(v.trim());
+              if (n != null && n > 0) setState(() => _dailyMinutes = n);
+            },
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
             children: [
-              Expanded(
-                child: Slider(
-                  value: _dailyMinutes.toDouble(),
-                  min: 10,
-                  max: 180,
-                  divisions: 34,
-                  label: formatMinutes(_dailyMinutes),
-                  onChanged: (v) => setState(() => _dailyMinutes = v.round()),
+              for (final v in const [20, 30, 45, 60])
+                ActionChip(
+                  label: Text('$v 分钟'),
+                  onPressed: () => setState(() {
+                    _dailyMinutes = v;
+                    _minutesCtrl.text = '$v';
+                  }),
                 ),
-              ),
-              SizedBox(
-                width: 76,
-                child: Text(
-                  formatMinutes(_dailyMinutes),
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(fontWeight: FontWeight.w600),
-                ),
-              ),
             ],
           ),
         ],
@@ -252,13 +276,28 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
   }
 
   Future<void> _save() async {
+    final minutes = int.tryParse(_minutesCtrl.text.trim());
+    final pages = int.tryParse(_pagesCtrl.text.trim());
+    if (_byPages && (pages == null || pages <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入有效的每天页数')),
+      );
+      return;
+    }
+    if (!_byPages && (minutes == null || minutes <= 0)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('请输入有效的每天时长')),
+      );
+      return;
+    }
+
     final repo = ref.read(repositoryProvider);
     final result = await repo.savePlan(
       bookId: widget.bookId,
       startDate: today(),
       deadline: _noDeadline ? null : _deadline,
-      dailyMinutes: _dailyMinutes,
-      dailyPages: _byPages ? _dailyPages : null,
+      dailyMinutes: minutes ?? _dailyMinutes,
+      dailyPages: _byPages ? pages : null,
       weekdays: _weekdays,
     );
     if (!mounted) return;
