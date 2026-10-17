@@ -44,14 +44,14 @@ final tasksInRangeProvider =
   return ref.watch(repositoryProvider).watchTasksBetween(range.$1, range.$2);
 });
 
-/// 当前正在进行的计时（无则为 null）。
+/// 当前正在进行的计时（无则为 null）。书本可能尚未选择。
 final activeTimerProvider = Provider<ActiveTimer?>((ref) {
   final s = ref.watch(settingsProvider).valueOrNull;
-  if (s == null || s.activeStartedAt == null || s.activeBookId == null) {
+  if (s == null || s.activeStartedAt == null) {
     return null;
   }
   return ActiveTimer(
-    bookId: s.activeBookId!,
+    bookId: s.activeBookId,
     taskId: s.activeTaskId,
     startedAt: s.activeStartedAt!,
     runningSince: s.activeRunningSince,

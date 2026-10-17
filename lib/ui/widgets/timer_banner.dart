@@ -36,6 +36,57 @@ Future<void> startTimerFor(
   );
 }
 
+/// 先开计时，书本之后再选。
+Future<void> startFreeTimer(BuildContext context, WidgetRef ref) async {
+  if (ref.read(activeTimerProvider) != null) {
+    await openFocusTimer(context);
+    return;
+  }
+  await ref.read(repositoryProvider).startTimer();
+  if (!context.mounted) return;
+  await Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => const FocusTimerPage()),
+  );
+}
+
+/// 为当前计时选择书本。返回是否已选中。
+Future<bool> pickBookForTimer(BuildContext context, WidgetRef ref) async {
+  final repo = ref.read(repositoryProvider);
+  final books = await repo.allBooks();
+  if (!context.mounted) return false;
+  if (books.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('还没有读物，请先在书架添加')),
+    );
+    return false;
+  }
+  final selected = await showModalBottomSheet<Book>(
+    context: context,
+    showDragHandle: true,
+    builder: (context) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Text('选择正在读的书'),
+          ),
+          for (final b in books)
+            ListTile(
+              leading: const Icon(Icons.menu_book_outlined),
+              title: Text(b.title),
+              subtitle: b.author == null ? null : Text(b.author!),
+              onTap: () => Navigator.pop(context, b),
+            ),
+        ],
+      ),
+    ),
+  );
+  if (selected == null) return false;
+  await repo.setTimerBook(selected.id);
+  return true;
+}
+
 /// 打开专注计时页。
 Future<void> openFocusTimer(BuildContext context) {
   return Navigator.of(context).push(
@@ -48,16 +99,25 @@ Future<void> showStopTimerDialog(
   BuildContext context,
   WidgetRef ref,
 ) async {
-  final timer = ref.read(activeTimerProvider);
-  if (timer == null) return;
+  final initial = ref.read(activeTimerProvider);
+  if (initial == null) return;
   final repo = ref.read(repositoryProvider);
+  // 先计时后选书：结束前必须指定书本。
+  var timer = initial;
+  if (timer.bookId == null) {
+    await pickBookForTimer(context, ref);
+    if (!context.mounted) return;
+    final updated = ref.read(activeTimerProvider);
+    if (updated == null || updated.bookId == null) return;
+    timer = updated;
+  }
   final boundTask =
       timer.taskId == null ? null : await repo.getTask(timer.taskId!);
   // 自由计时时，归到今天这本书的任务，这样时长也能计进去。
   final task = boundTask ??
-      await repo.taskForBookOnDate(timer.bookId, DateTime.now());
+      await repo.taskForBookOnDate(timer.bookId!, DateTime.now());
   final attributed = boundTask == null && task != null;
-  final book = await repo.getBook(timer.bookId);
+  final book = await repo.getBook(timer.bookId!);
   final elapsed = timer.elapsedSecondsAt(DateTime.now());
   if (!context.mounted) return;
 
@@ -178,7 +238,8 @@ class _TimerBannerState extends ConsumerState<TimerBanner> {
     if (timer == null) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
-    final book = ref.watch(bookProvider(timer.bookId)).valueOrNull;
+    final book =
+        timer.bookId == null ? null : ref.watch(bookProvider(timer.bookId!)).valueOrNull;
     final elapsed = timer.elapsedSecondsAt(DateTime.now());
 
     return Material(
@@ -196,7 +257,8 @@ class _TimerBannerState extends ConsumerState<TimerBanner> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      book?.title ?? '阅读中',
+                      book?.title ??
+                          (timer.bookId == null ? '未选择书本' : '阅读中'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

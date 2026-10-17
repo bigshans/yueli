@@ -51,11 +51,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
       return;
     }
     var title = '阅读';
-    try {
-      final book = await ref.read(repositoryProvider).getBook(timer.bookId);
-      if (book != null) title = book.title;
-    } catch (_) {
-      // 忽略
+    if (timer.bookId != null) {
+      try {
+        final book = await ref.read(repositoryProvider).getBook(timer.bookId!);
+        if (book != null) title = book.title;
+      } catch (_) {
+        // 忽略
+      }
     }
     final elapsed = timer.elapsedSecondsAt(DateTime.now());
     if (timer.isRunning) {

@@ -68,7 +68,7 @@ class ActiveTimer {
     required this.accumulatedSeconds,
   });
 
-  final int bookId;
+  final int? bookId;
   final int? taskId;
 
   /// 整个计时会话开始时刻。
@@ -429,12 +429,12 @@ class ReadingRepository {
 
   // ---------- 计时 ----------
 
-  /// 读取当前计时状态（无则为 null）。
+  /// 读取当前计时状态（无则为 null）。书可以不先选。
   Future<ActiveTimer?> activeTimer() async {
     final s = await db.loadSettings();
-    if (s.activeStartedAt == null || s.activeBookId == null) return null;
+    if (s.activeStartedAt == null) return null;
     return ActiveTimer(
-      bookId: s.activeBookId!,
+      bookId: s.activeBookId,
       taskId: s.activeTaskId,
       startedAt: s.activeStartedAt!,
       runningSince: s.activeRunningSince,
@@ -442,9 +442,9 @@ class ReadingRepository {
     );
   }
 
-  /// 开始计时。[taskId] 为空表示自由阅读（不绑定某次任务）。
+  /// 开始计时。[bookId] / [taskId] 可先留空，之后再补。
   Future<void> startTimer({
-    required int bookId,
+    int? bookId,
     int? taskId,
     DateTime? now,
   }) async {
@@ -458,6 +458,14 @@ class ReadingRepository {
         activeRunningSince: Value(at),
         activeAccumulatedSeconds: const Value(0),
       ),
+    );
+  }
+
+  /// 给当前正在进行的计时指定书本（先计时后选书）。
+  Future<void> setTimerBook(int bookId) async {
+    await db.loadSettings();
+    await (db.update(db.appSettings)..where((t) => t.id.equals(1))).write(
+      AppSettingsCompanion(activeBookId: Value(bookId)),
     );
   }
 
@@ -508,10 +516,11 @@ class ReadingRepository {
     int? reachedPage,
     bool completeTask = false,
     DateTime? now,
+    int? fallbackBookId,
   }) async {
     final settings = await db.loadSettings();
     final startedAt = settings.activeStartedAt;
-    final bookId = settings.activeBookId;
+    final bookId = settings.activeBookId ?? fallbackBookId;
     if (startedAt == null || bookId == null) return;
 
     final endedAt = now ?? DateTime.now();

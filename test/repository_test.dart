@@ -435,6 +435,29 @@ void main() {
     );
   });
 
+  test('先计时后选书：结束后补选书本并记录', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    final t0 = DateTime(2025, 1, 6, 20, 0);
+    await repo.startTimer(now: t0); // 不先选书
+
+    var timer = await repo.activeTimer();
+    expect(timer, isNotNull);
+    expect(timer!.bookId, isNull);
+
+    await repo.setTimerBook(id);
+    timer = await repo.activeTimer();
+    expect(timer!.bookId, id);
+
+    await repo.stopTimer(
+      reachedPage: 15,
+      now: t0.add(const Duration(minutes: 30)),
+    );
+    final book = await repo.getBook(id);
+    expect(book!.currentPage, 15);
+    final sessions = await repo.watchSessions(id).first;
+    expect(sessions.single.durationSeconds, 1800);
+  });
+
   test('暂停/继续：只累计真正在跑的时长', () async {
     final id = await repo.createBook(title: '书', totalPages: 100);
     final t0 = DateTime(2025, 1, 6, 20, 0);

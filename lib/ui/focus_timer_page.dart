@@ -93,11 +93,15 @@ class _TimerBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final book = ref.watch(bookProvider(timer.bookId)).valueOrNull;
-    final plan = ref.watch(planForBookProvider(timer.bookId)).valueOrNull;
+    final bookId = timer.bookId;
+    final book =
+        bookId == null ? null : ref.watch(bookProvider(bookId)).valueOrNull;
+    final plan =
+        bookId == null ? null : ref.watch(planForBookProvider(bookId)).valueOrNull;
     final settings = ref.watch(settingsProvider).valueOrNull;
-    final todayTask =
-        ref.watch(taskOnDateProvider((timer.bookId, today()))).valueOrNull;
+    final todayTask = bookId == null
+        ? null
+        : ref.watch(taskOnDateProvider((bookId, today()))).valueOrNull;
     final targetPages = todayTask == null
         ? plan?.dailyPages
         : todayTask.endPage - todayTask.startPage + 1;
@@ -121,7 +125,7 @@ class _TimerBody extends ConsumerWidget {
         children: [
           const SizedBox(height: 8),
           Text(
-            book?.title ?? '阅读中',
+            book?.title ?? (bookId == null ? '未选择书本' : '阅读中'),
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
@@ -130,6 +134,12 @@ class _TimerBody extends ConsumerWidget {
                 .titleLarge
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
+          if (bookId == null)
+            TextButton.icon(
+              onPressed: () => pickBookForTimer(context, ref),
+              icon: const Icon(Icons.menu_book_outlined, size: 18),
+              label: const Text('选择书本'),
+            ),
           const SizedBox(height: 4),
           Text(
             timer.isRunning ? '计时中' : '已暂停',

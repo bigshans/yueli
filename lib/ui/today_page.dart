@@ -5,6 +5,7 @@ import '../core/date_x.dart';
 import '../state/providers.dart';
 import 'settings_page.dart';
 import 'widgets/task_card.dart';
+import 'widgets/timer_banner.dart';
 
 class TodayPage extends ConsumerWidget {
   const TodayPage({super.key});
@@ -18,6 +19,11 @@ class TodayPage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('今日'),
         actions: [
+          IconButton(
+            tooltip: '开始计时',
+            icon: const Icon(Icons.timer_outlined),
+            onPressed: () => startFreeTimer(context, ref),
+          ),
           IconButton(
             tooltip: '设置',
             icon: const Icon(Icons.tune),
