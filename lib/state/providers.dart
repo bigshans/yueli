@@ -92,3 +92,8 @@ final restDatesProvider =
 final allSessionsProvider = StreamProvider<List<ReadingSession>>((ref) {
   return ref.watch(repositoryProvider).watchAllSessions();
 });
+
+/// 某本书的各遍阅读记录。
+final readingsProvider = StreamProvider.family<List<Reading>, int>((ref, bookId) {
+  return ref.watch(repositoryProvider).watchReadings(bookId);
+});

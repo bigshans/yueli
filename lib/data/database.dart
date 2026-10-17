@@ -5,14 +5,15 @@ import 'tables.dart';
 
 part 'database.g.dart';
 
-@DriftDatabase(tables: [Books, Plans, Tasks, ReadingSessions, RestDays, AppSettings])
+@DriftDatabase(
+    tables: [Books, Plans, Tasks, ReadingSessions, Readings, RestDays, AppSettings])
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   static QueryExecutor _open() => driftDatabase(name: 'reader_management');
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -43,6 +44,20 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 7) {
             await m.addColumn(books, books.tags);
+          }
+          if (from < 8) {
+            await m.addColumn(books, books.round);
+            await m.addColumn(readingSessions, readingSessions.round);
+            await m.createTable(readings);
+            // 为已有书籍补建当前轮次记录。
+            final existing = await select(books).get();
+            for (final b in existing) {
+              await into(readings).insert(ReadingsCompanion.insert(
+                bookId: b.id,
+                round: b.round,
+                startedAt: b.createdAt,
+              ));
+            }
           }
         },
         beforeOpen: (details) async {

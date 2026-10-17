@@ -469,6 +469,42 @@ void main() {
     expect(parseTags(null), isEmpty);
   });
 
+  test('重读：轮次递增、进度归零、保留旧记录', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    // 第一遍读完
+    await repo.updateBook(id, const BooksCompanion(currentPage: Value(100)));
+    var readings = await repo.watchReadings(id).first;
+    expect(readings.length, 1);
+    expect(readings.single.round, 1);
+    expect(readings.single.finishedAt, isNotNull);
+
+    await repo.startReread(id);
+    final book = await repo.getBook(id);
+    expect(book!.round, 2);
+    expect(book.currentPage, 0);
+
+    readings = await repo.watchReadings(id).first;
+    expect(readings.length, 2);
+    expect(readings.last.round, 2);
+    expect(readings.last.finishedAt, isNull);
+  });
+
+  test('重读后新会话记录到新轮次', () async {
+    final id = await repo.createBook(title: '书', totalPages: 100);
+    await repo.updateBook(id, const BooksCompanion(currentPage: Value(100)));
+    await repo.startReread(id);
+
+    final t0 = DateTime(2025, 1, 6, 20, 0);
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(
+      reachedPage: 10,
+      now: t0.add(const Duration(minutes: 30)),
+    );
+
+    final sessions = await repo.watchSessions(id).first;
+    expect(sessions.single.round, 2);
+  });
+
   test('暂停/继续：只累计真正在跑的时长', () async {
     final id = await repo.createBook(title: '书', totalPages: 100);
     final t0 = DateTime(2025, 1, 6, 20, 0);

@@ -83,6 +83,11 @@ class BookDetailPage extends ConsumerWidget {
                 const SizedBox(height: 16),
               ],
               _SectionCard(
+                title: '阅读轮次',
+                child: _ReadingRounds(book: book),
+              ),
+              const SizedBox(height: 16),
+              _SectionCard(
                 title: '阅读历史',
                 child: _RecentHistory(bookId: bookId),
               ),
@@ -653,5 +658,129 @@ class _RecentHistory extends ConsumerWidget {
         ],
       ),
     );
+  }
+}
+
+/// 各遍阅读记录，并在读完时提供「开始重读」。
+class _ReadingRounds extends ConsumerWidget {
+  const _ReadingRounds({required this.book});
+  final Book book;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final readingsAsync = ref.watch(readingsProvider(book.id));
+    final sessions =
+        ref.watch(sessionsProvider(book.id)).valueOrNull ?? const [];
+    final finished = book.totalPages > 0 && book.currentPage >= book.totalPages;
+
+    // 每遍的累计时长/页数。
+    final totals = <int, (int, int)>{};
+    for (final s in sessions) {
+      final cur = totals[s.round] ?? (0, 0);
+      totals[s.round] =
+          (cur.$1 + s.durationSeconds, cur.$2 + (s.pagesRead ?? 0));
+    }
+
+    return readingsAsync.when(
+      loading: () => const Padding(
+        padding: EdgeInsets.all(8),
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      ),
+      error: (e, _) => Text('出错了：$e'),
+      data: (readings) {
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final r in readings) _row(context, r, totals[r.round]),
+            const SizedBox(height: 8),
+            if (finished)
+              FilledButton.tonalIcon(
+                onPressed: () => _confirmReread(context, ref),
+                icon: const Icon(Icons.replay),
+                label: Text('开始重读（第 ${book.round + 1} 遍）'),
+              )
+            else
+              Text(
+                '这一遍读完后可以开始重读。',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _row(BuildContext context, Reading r, (int, int)? total) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isCurrent = r.round == book.round;
+    final active = isCurrent && r.finishedAt == null;
+    final range = r.finishedAt == null
+        ? '${formatDate(r.startedAt)} 起'
+        : '${formatDate(r.startedAt)} ~ ${formatDate(r.finishedAt!)}';
+    final totals = total == null
+        ? ''
+        : ' · ${formatMinutes((total.$1 / 60).round())} · ${total.$2} 页';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 5),
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: isCurrent ? scheme.primary : scheme.outline,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '第 ${r.round} 遍${active ? '（进行中）' : ''}',
+                  style: const TextStyle(
+                      fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+                Text(
+                  '$range$totals',
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirmReread(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('开始重读《${book.title}》？'),
+        content: const Text('会开始新的一遍，进度重置为第 1 页；之前的阅读记录会保留。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('开始重读'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true) {
+      await ref.read(repositoryProvider).startReread(book.id);
+    }
   }
 }

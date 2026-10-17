@@ -16,6 +16,9 @@ class Books extends Table {
   /// 标签，逗号分隔。
   TextColumn get tags => text().nullable()();
 
+  /// 当前是第几遍阅读（重读会递增）。
+  IntColumn get round => integer().withDefault(const Constant(1))();
+
   /// 用户手填的阅读速度（页/小时）。留空则用自动学习值或全局默认。
   IntColumn get manualPagesPerHour => integer().nullable()();
 
@@ -87,6 +90,21 @@ class ReadingSessions extends Table {
   DateTimeColumn get endedAt => dateTime()();
   IntColumn get durationSeconds => integer()();
   IntColumn get pagesRead => integer().nullable()();
+
+  /// 属于第几遍阅读。
+  IntColumn get round => integer().withDefault(const Constant(1))();
+  DateTimeColumn get createdAt =>
+      dateTime().withDefault(currentDateAndTime)();
+}
+
+/// 一本书的每一遍阅读记录。
+class Readings extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bookId =>
+      integer().references(Books, #id, onDelete: KeyAction.cascade)();
+  IntColumn get round => integer()();
+  DateTimeColumn get startedAt => dateTime()();
+  DateTimeColumn get finishedAt => dateTime().nullable()();
   DateTimeColumn get createdAt =>
       dateTime().withDefault(currentDateAndTime)();
 }

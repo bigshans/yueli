@@ -159,8 +159,8 @@ class ReadingRepository {
     int priority = 2,
     int? manualPagesPerHour,
     String? tags,
-  }) {
-    return db.into(db.books).insert(BooksCompanion.insert(
+  }) async {
+    final id = await db.into(db.books).insert(BooksCompanion.insert(
           title: title,
           author: Value(author),
           totalPages: totalPages,
@@ -169,14 +169,64 @@ class ReadingRepository {
           manualPagesPerHour: Value(manualPagesPerHour),
           tags: Value(tags),
         ));
+    await db.into(db.readings).insert(ReadingsCompanion.insert(
+          bookId: id,
+          round: 1,
+          startedAt: DateTime.now(),
+        ));
+    return id;
   }
 
-  Future<void> updateBook(int id, BooksCompanion patch) {
-    return (db.update(db.books)..where((t) => t.id.equals(id))).write(patch);
+  Future<void> updateBook(int id, BooksCompanion patch) async {
+    await (db.update(db.books)..where((t) => t.id.equals(id))).write(patch);
+    final book = await getBook(id);
+    if (book != null &&
+        book.totalPages > 0 &&
+        book.currentPage >= book.totalPages) {
+      await _finishRound(id, book.round);
+    }
   }
 
   Future<void> deleteBook(int id) async {
     await (db.delete(db.books)..where((t) => t.id.equals(id))).go();
+  }
+
+  // ---------- 重读 / 轮次 ----------
+
+  /// 某本书的各遍阅读记录（按轮次升序）。
+  Stream<List<Reading>> watchReadings(int bookId) {
+    return (db.select(db.readings)
+          ..where((t) => t.bookId.equals(bookId))
+          ..orderBy([(t) => OrderingTerm.asc(t.round)]))
+        .watch();
+  }
+
+  /// 开始重读：结束当前轮次，轮次 +1，进度归零并重排。
+  Future<void> startReread(int bookId) async {
+    final book = await getBook(bookId);
+    if (book == null) return;
+    final now = DateTime.now();
+    await _finishRound(bookId, book.round, at: now);
+    final next = book.round + 1;
+    await (db.update(db.books)..where((t) => t.id.equals(bookId))).write(
+      BooksCompanion(round: Value(next), currentPage: const Value(0)),
+    );
+    await db.into(db.readings).insert(ReadingsCompanion.insert(
+          bookId: bookId,
+          round: next,
+          startedAt: now,
+        ));
+    final plan = await getPlanForBook(bookId);
+    if (plan != null) await reschedulePlan(plan.id);
+  }
+
+  Future<void> _finishRound(int bookId, int round, {DateTime? at}) async {
+    await (db.update(db.readings)
+          ..where((t) =>
+              t.bookId.equals(bookId) &
+              t.round.equals(round) &
+              t.finishedAt.isNull()))
+        .write(ReadingsCompanion(finishedAt: Value(at ?? DateTime.now())));
   }
 
   /// 该书的有效阅读速度。
@@ -326,6 +376,9 @@ class ReadingRepository {
     }
 
     final completed = book.currentPage >= book.totalPages;
+    if (completed) {
+      await _finishRound(book.id, book.round);
+    }
     await (db.update(db.plans)..where((t) => t.id.equals(planId))).write(
       PlansCompanion(
         status: Value(completed
@@ -577,6 +630,7 @@ class ReadingRepository {
           endedAt: endedAt,
           durationSeconds: seconds,
           pagesRead: Value(pagesRead),
+          round: Value(book?.round ?? 1),
         ));
 
     await cancelTimer();
