@@ -458,6 +458,17 @@ void main() {
     expect(sessions.single.durationSeconds, 1800);
   });
 
+  test('标签保存与解析', () async {
+    final id = await repo.createBook(
+      title: '书',
+      totalPages: 100,
+      tags: encodeTags(['技术', '心理学']),
+    );
+    final book = await repo.getBook(id);
+    expect(parseTags(book!.tags), ['技术', '心理学']);
+    expect(parseTags(null), isEmpty);
+  });
+
   test('暂停/继续：只累计真正在跑的时长', () async {
     final id = await repo.createBook(title: '书', totalPages: 100);
     final t0 = DateTime(2025, 1, 6, 20, 0);

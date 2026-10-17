@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/database.dart';
+import '../data/repository.dart';
 import '../state/providers.dart';
 import 'book_detail_page.dart';
 import 'widgets/timer_banner.dart';
@@ -22,6 +23,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
   late final TextEditingController _total;
   late final TextEditingController _current;
   late final TextEditingController _pace;
+  late final TextEditingController _tags;
   int _priority = 2;
 
   bool get _isEdit => widget.book != null;
@@ -37,6 +39,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     _pace = TextEditingController(
       text: b?.manualPagesPerHour?.toString() ?? '',
     );
+    _tags = TextEditingController(text: b?.tags ?? '');
     _priority = b?.priority ?? 2;
   }
 
@@ -47,6 +50,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     _total.dispose();
     _current.dispose();
     _pace.dispose();
+    _tags.dispose();
     super.dispose();
   }
 
@@ -58,6 +62,8 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     final total = int.parse(_total.text.trim());
     final current = int.tryParse(_current.text.trim()) ?? 0;
     final pace = int.tryParse(_pace.text.trim());
+    final tagsText = encodeTags(parseTags(_tags.text));
+    final tags = tagsText.isEmpty ? null : tagsText;
 
     if (_isEdit) {
       await repo.updateBook(
@@ -69,6 +75,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
           currentPage: Value(current.clamp(0, total)),
           priority: Value(_priority),
           manualPagesPerHour: Value(pace),
+          tags: Value(tags),
         ),
       );
       final plan = await repo.getPlanForBook(widget.book!.id);
@@ -83,6 +90,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
       currentPage: current.clamp(0, total),
       priority: _priority,
       manualPagesPerHour: pace,
+      tags: tags,
     );
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -124,6 +132,17 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
               textInputAction: TextInputAction.next,
               decoration: const InputDecoration(
                 labelText: '作者（可选）',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _tags,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(
+                labelText: '标签（可选，用逗号分隔）',
+                hintText: '如：技术, 心理学',
+                prefixIcon: Icon(Icons.local_offer_outlined),
                 border: OutlineInputBorder(),
               ),
             ),

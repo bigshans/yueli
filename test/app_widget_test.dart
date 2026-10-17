@@ -8,6 +8,7 @@ import 'package:reader_management/core/date_x.dart';
 import 'package:reader_management/data/database.dart';
 import 'package:reader_management/data/repository.dart';
 import 'package:reader_management/state/providers.dart';
+import 'package:reader_management/ui/books_page.dart';
 import 'package:reader_management/ui/calendar_page.dart';
 import 'package:reader_management/ui/global_stats_page.dart';
 import 'package:reader_management/ui/stats_page.dart';
@@ -177,6 +178,50 @@ void main() {
     await settle(tester);
     expect(find.text('甲书'), findsWidgets);
     expect(find.text('乙书'), findsWidgets);
+
+    await unmount(tester);
+  });
+
+  testWidgets('书架支持按书名 / 作者 / 标签搜索', (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repo = ReadingRepository(db);
+    await repo.createBook(
+      title: '深入浅出',
+      author: '张三',
+      totalPages: 100,
+      tags: encodeTags(['技术']),
+    );
+    await repo.createBook(
+      title: '另一本',
+      author: '李四',
+      totalPages: 100,
+      tags: encodeTags(['小说']),
+    );
+
+    await tester.pumpWidget(ProviderScope(
+      overrides: [databaseProvider.overrideWithValue(db)],
+      child: const MaterialApp(home: BooksPage()),
+    ));
+    await settle(tester);
+    expect(find.text('深入浅出'), findsOneWidget);
+    expect(find.text('另一本'), findsOneWidget);
+
+    final search = find.byType(TextField).first;
+
+    await tester.enterText(search, '小说');
+    await settle(tester);
+    expect(find.text('另一本'), findsOneWidget);
+    expect(find.text('深入浅出'), findsNothing);
+
+    await tester.enterText(search, '张三');
+    await settle(tester);
+    expect(find.text('深入浅出'), findsOneWidget);
+    expect(find.text('另一本'), findsNothing);
+
+    await tester.enterText(search, '深入');
+    await settle(tester);
+    expect(find.text('深入浅出'), findsOneWidget);
 
     await unmount(tester);
   });

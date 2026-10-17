@@ -170,6 +170,31 @@ class _Header extends StatelessWidget {
                 ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
           ),
         ],
+        if (parseTags(book.tags).isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final t in parseTags(book.tags))
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondaryContainer,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '#$t',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: theme.colorScheme.onSecondaryContainer,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ],
         const SizedBox(height: 16),
         ClipRRect(
           borderRadius: BorderRadius.circular(6),

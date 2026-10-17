@@ -74,6 +74,15 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     requiredDuringInsert: false,
     defaultValue: const Constant(2),
   );
+  static const VerificationMeta _tagsMeta = const VerificationMeta('tags');
+  @override
+  late final GeneratedColumn<String> tags = GeneratedColumn<String>(
+    'tags',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _manualPagesPerHourMeta =
       const VerificationMeta('manualPagesPerHour');
   @override
@@ -115,6 +124,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     totalPages,
     currentPage,
     priority,
+    tags,
     manualPagesPerHour,
     measuredPagesPerHour,
     createdAt,
@@ -169,6 +179,12 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
       context.handle(
         _priorityMeta,
         priority.isAcceptableOrUnknown(data['priority']!, _priorityMeta),
+      );
+    }
+    if (data.containsKey('tags')) {
+      context.handle(
+        _tagsMeta,
+        tags.isAcceptableOrUnknown(data['tags']!, _tagsMeta),
       );
     }
     if (data.containsKey('manual_pages_per_hour')) {
@@ -228,6 +244,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.int,
         data['${effectivePrefix}priority'],
       )!,
+      tags: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tags'],
+      ),
       manualPagesPerHour: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}manual_pages_per_hour'],
@@ -261,6 +281,9 @@ class Book extends DataClass implements Insertable<Book> {
   /// 1 = 高，2 = 中，3 = 低。
   final int priority;
 
+  /// 标签，逗号分隔。
+  final String? tags;
+
   /// 用户手填的阅读速度（页/小时）。留空则用自动学习值或全局默认。
   final int? manualPagesPerHour;
 
@@ -274,6 +297,7 @@ class Book extends DataClass implements Insertable<Book> {
     required this.totalPages,
     required this.currentPage,
     required this.priority,
+    this.tags,
     this.manualPagesPerHour,
     this.measuredPagesPerHour,
     required this.createdAt,
@@ -289,6 +313,9 @@ class Book extends DataClass implements Insertable<Book> {
     map['total_pages'] = Variable<int>(totalPages);
     map['current_page'] = Variable<int>(currentPage);
     map['priority'] = Variable<int>(priority);
+    if (!nullToAbsent || tags != null) {
+      map['tags'] = Variable<String>(tags);
+    }
     if (!nullToAbsent || manualPagesPerHour != null) {
       map['manual_pages_per_hour'] = Variable<int>(manualPagesPerHour);
     }
@@ -309,6 +336,7 @@ class Book extends DataClass implements Insertable<Book> {
       totalPages: Value(totalPages),
       currentPage: Value(currentPage),
       priority: Value(priority),
+      tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
       manualPagesPerHour: manualPagesPerHour == null && nullToAbsent
           ? const Value.absent()
           : Value(manualPagesPerHour),
@@ -331,6 +359,7 @@ class Book extends DataClass implements Insertable<Book> {
       totalPages: serializer.fromJson<int>(json['totalPages']),
       currentPage: serializer.fromJson<int>(json['currentPage']),
       priority: serializer.fromJson<int>(json['priority']),
+      tags: serializer.fromJson<String?>(json['tags']),
       manualPagesPerHour: serializer.fromJson<int?>(json['manualPagesPerHour']),
       measuredPagesPerHour: serializer.fromJson<double?>(
         json['measuredPagesPerHour'],
@@ -348,6 +377,7 @@ class Book extends DataClass implements Insertable<Book> {
       'totalPages': serializer.toJson<int>(totalPages),
       'currentPage': serializer.toJson<int>(currentPage),
       'priority': serializer.toJson<int>(priority),
+      'tags': serializer.toJson<String?>(tags),
       'manualPagesPerHour': serializer.toJson<int?>(manualPagesPerHour),
       'measuredPagesPerHour': serializer.toJson<double?>(measuredPagesPerHour),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -361,6 +391,7 @@ class Book extends DataClass implements Insertable<Book> {
     int? totalPages,
     int? currentPage,
     int? priority,
+    Value<String?> tags = const Value.absent(),
     Value<int?> manualPagesPerHour = const Value.absent(),
     Value<double?> measuredPagesPerHour = const Value.absent(),
     DateTime? createdAt,
@@ -371,6 +402,7 @@ class Book extends DataClass implements Insertable<Book> {
     totalPages: totalPages ?? this.totalPages,
     currentPage: currentPage ?? this.currentPage,
     priority: priority ?? this.priority,
+    tags: tags.present ? tags.value : this.tags,
     manualPagesPerHour: manualPagesPerHour.present
         ? manualPagesPerHour.value
         : this.manualPagesPerHour,
@@ -391,6 +423,7 @@ class Book extends DataClass implements Insertable<Book> {
           ? data.currentPage.value
           : this.currentPage,
       priority: data.priority.present ? data.priority.value : this.priority,
+      tags: data.tags.present ? data.tags.value : this.tags,
       manualPagesPerHour: data.manualPagesPerHour.present
           ? data.manualPagesPerHour.value
           : this.manualPagesPerHour,
@@ -410,6 +443,7 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('totalPages: $totalPages, ')
           ..write('currentPage: $currentPage, ')
           ..write('priority: $priority, ')
+          ..write('tags: $tags, ')
           ..write('manualPagesPerHour: $manualPagesPerHour, ')
           ..write('measuredPagesPerHour: $measuredPagesPerHour, ')
           ..write('createdAt: $createdAt')
@@ -425,6 +459,7 @@ class Book extends DataClass implements Insertable<Book> {
     totalPages,
     currentPage,
     priority,
+    tags,
     manualPagesPerHour,
     measuredPagesPerHour,
     createdAt,
@@ -439,6 +474,7 @@ class Book extends DataClass implements Insertable<Book> {
           other.totalPages == this.totalPages &&
           other.currentPage == this.currentPage &&
           other.priority == this.priority &&
+          other.tags == this.tags &&
           other.manualPagesPerHour == this.manualPagesPerHour &&
           other.measuredPagesPerHour == this.measuredPagesPerHour &&
           other.createdAt == this.createdAt);
@@ -451,6 +487,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<int> totalPages;
   final Value<int> currentPage;
   final Value<int> priority;
+  final Value<String?> tags;
   final Value<int?> manualPagesPerHour;
   final Value<double?> measuredPagesPerHour;
   final Value<DateTime> createdAt;
@@ -461,6 +498,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.totalPages = const Value.absent(),
     this.currentPage = const Value.absent(),
     this.priority = const Value.absent(),
+    this.tags = const Value.absent(),
     this.manualPagesPerHour = const Value.absent(),
     this.measuredPagesPerHour = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -472,6 +510,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     required int totalPages,
     this.currentPage = const Value.absent(),
     this.priority = const Value.absent(),
+    this.tags = const Value.absent(),
     this.manualPagesPerHour = const Value.absent(),
     this.measuredPagesPerHour = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -484,6 +523,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<int>? totalPages,
     Expression<int>? currentPage,
     Expression<int>? priority,
+    Expression<String>? tags,
     Expression<int>? manualPagesPerHour,
     Expression<double>? measuredPagesPerHour,
     Expression<DateTime>? createdAt,
@@ -495,6 +535,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (totalPages != null) 'total_pages': totalPages,
       if (currentPage != null) 'current_page': currentPage,
       if (priority != null) 'priority': priority,
+      if (tags != null) 'tags': tags,
       if (manualPagesPerHour != null)
         'manual_pages_per_hour': manualPagesPerHour,
       if (measuredPagesPerHour != null)
@@ -510,6 +551,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<int>? totalPages,
     Value<int>? currentPage,
     Value<int>? priority,
+    Value<String?>? tags,
     Value<int?>? manualPagesPerHour,
     Value<double?>? measuredPagesPerHour,
     Value<DateTime>? createdAt,
@@ -521,6 +563,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       totalPages: totalPages ?? this.totalPages,
       currentPage: currentPage ?? this.currentPage,
       priority: priority ?? this.priority,
+      tags: tags ?? this.tags,
       manualPagesPerHour: manualPagesPerHour ?? this.manualPagesPerHour,
       measuredPagesPerHour: measuredPagesPerHour ?? this.measuredPagesPerHour,
       createdAt: createdAt ?? this.createdAt,
@@ -548,6 +591,9 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (priority.present) {
       map['priority'] = Variable<int>(priority.value);
     }
+    if (tags.present) {
+      map['tags'] = Variable<String>(tags.value);
+    }
     if (manualPagesPerHour.present) {
       map['manual_pages_per_hour'] = Variable<int>(manualPagesPerHour.value);
     }
@@ -571,6 +617,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('totalPages: $totalPages, ')
           ..write('currentPage: $currentPage, ')
           ..write('priority: $priority, ')
+          ..write('tags: $tags, ')
           ..write('manualPagesPerHour: $manualPagesPerHour, ')
           ..write('measuredPagesPerHour: $measuredPagesPerHour, ')
           ..write('createdAt: $createdAt')
@@ -3296,6 +3343,7 @@ typedef $$BooksTableCreateCompanionBuilder =
       required int totalPages,
       Value<int> currentPage,
       Value<int> priority,
+      Value<String?> tags,
       Value<int?> manualPagesPerHour,
       Value<double?> measuredPagesPerHour,
       Value<DateTime> createdAt,
@@ -3308,6 +3356,7 @@ typedef $$BooksTableUpdateCompanionBuilder =
       Value<int> totalPages,
       Value<int> currentPage,
       Value<int> priority,
+      Value<String?> tags,
       Value<int?> manualPagesPerHour,
       Value<double?> measuredPagesPerHour,
       Value<DateTime> createdAt,
@@ -3411,6 +3460,11 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
 
   ColumnFilters<int> get priority => $composableBuilder(
     column: $table.priority,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tags => $composableBuilder(
+    column: $table.tags,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3544,6 +3598,11 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get tags => $composableBuilder(
+    column: $table.tags,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get manualPagesPerHour => $composableBuilder(
     column: $table.manualPagesPerHour,
     builder: (column) => ColumnOrderings(column),
@@ -3590,6 +3649,9 @@ class $$BooksTableAnnotationComposer
 
   GeneratedColumn<int> get priority =>
       $composableBuilder(column: $table.priority, builder: (column) => column);
+
+  GeneratedColumn<String> get tags =>
+      $composableBuilder(column: $table.tags, builder: (column) => column);
 
   GeneratedColumn<int> get manualPagesPerHour => $composableBuilder(
     column: $table.manualPagesPerHour,
@@ -3718,6 +3780,7 @@ class $$BooksTableTableManager
                 Value<int> totalPages = const Value.absent(),
                 Value<int> currentPage = const Value.absent(),
                 Value<int> priority = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
                 Value<int?> manualPagesPerHour = const Value.absent(),
                 Value<double?> measuredPagesPerHour = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -3728,6 +3791,7 @@ class $$BooksTableTableManager
                 totalPages: totalPages,
                 currentPage: currentPage,
                 priority: priority,
+                tags: tags,
                 manualPagesPerHour: manualPagesPerHour,
                 measuredPagesPerHour: measuredPagesPerHour,
                 createdAt: createdAt,
@@ -3740,6 +3804,7 @@ class $$BooksTableTableManager
                 required int totalPages,
                 Value<int> currentPage = const Value.absent(),
                 Value<int> priority = const Value.absent(),
+                Value<String?> tags = const Value.absent(),
                 Value<int?> manualPagesPerHour = const Value.absent(),
                 Value<double?> measuredPagesPerHour = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -3750,6 +3815,7 @@ class $$BooksTableTableManager
                 totalPages: totalPages,
                 currentPage: currentPage,
                 priority: priority,
+                tags: tags,
                 manualPagesPerHour: manualPagesPerHour,
                 measuredPagesPerHour: measuredPagesPerHour,
                 createdAt: createdAt,

@@ -2,16 +2,42 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/database.dart';
+import '../data/repository.dart';
 import '../state/providers.dart';
 import 'book_detail_page.dart';
 import 'book_form_page.dart';
 
-class BooksPage extends ConsumerWidget {
+class BooksPage extends ConsumerStatefulWidget {
   const BooksPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BooksPage> createState() => _BooksPageState();
+}
+
+class _BooksPageState extends ConsumerState<BooksPage> {
+  final _search = TextEditingController();
+  String _query = '';
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  List<Book> _filter(List<Book> books) {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) return books;
+    return books.where((b) {
+      if (b.title.toLowerCase().contains(q)) return true;
+      if ((b.author ?? '').toLowerCase().contains(q)) return true;
+      return parseTags(b.tags).any((t) => t.toLowerCase().contains(q));
+    }).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final booksAsync = ref.watch(booksProvider);
+    final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('书架')),
@@ -22,44 +48,80 @@ class BooksPage extends ConsumerWidget {
         icon: const Icon(Icons.add),
         label: const Text('添加读物'),
       ),
-      body: booksAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('出错了：$e')),
-        data: (books) {
-          if (books.isEmpty) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.auto_stories_outlined,
-                      size: 56,
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('书架还是空的'),
-                    const SizedBox(height: 8),
-                    Text(
-                      '添加一本读物，设定截止日和每天可用的时间，\n就能自动排出每天读多少页。',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: TextField(
+              controller: _search,
+              decoration: InputDecoration(
+                hintText: '搜索书名 / 作者 / 标签',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          _search.clear();
+                          setState(() => _query = '');
+                        },
+                      ),
+                isDense: true,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            );
-          }
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
-            itemCount: books.length,
-            itemBuilder: (context, i) => _BookTile(book: books[i]),
-          );
-        },
+              onChanged: (v) => setState(() => _query = v),
+            ),
+          ),
+          Expanded(
+            child: booksAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('出错了：$e')),
+              data: (books) {
+                if (books.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.auto_stories_outlined,
+                              size: 56, color: scheme.outline),
+                          const SizedBox(height: 16),
+                          const Text('书架还是空的'),
+                          const SizedBox(height: 8),
+                          Text(
+                            '添加一本读物，设定截止日和每天可用的时间，\n就能自动排出每天读多少页。',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: scheme.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+                final filtered = _filter(books);
+                if (filtered.isEmpty) {
+                  return Center(
+                    child: Text(
+                      '没有找到匹配「$_query」的书',
+                      style: TextStyle(color: scheme.onSurfaceVariant),
+                    ),
+                  );
+                }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+                  itemCount: filtered.length,
+                  itemBuilder: (context, i) => _BookTile(book: filtered[i]),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -113,6 +175,31 @@ class _BookTile extends ConsumerWidget {
                   book.author!,
                   style: theme.textTheme.bodySmall
                       ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                ),
+              ],
+              if (parseTags(book.tags).isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: [
+                    for (final t in parseTags(book.tags))
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '#$t',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: theme.colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ],
               const SizedBox(height: 10),

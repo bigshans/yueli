@@ -13,6 +13,9 @@ class Books extends Table {
   /// 1 = 高，2 = 中，3 = 低。
   IntColumn get priority => integer().withDefault(const Constant(2))();
 
+  /// 标签，逗号分隔。
+  TextColumn get tags => text().nullable()();
+
   /// 用户手填的阅读速度（页/小时）。留空则用自动学习值或全局默认。
   IntColumn get manualPagesPerHour => integer().nullable()();
 

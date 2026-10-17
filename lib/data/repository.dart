@@ -102,6 +102,19 @@ String encodeWeekdays(Iterable<int> days) {
   return sorted.join(',');
 }
 
+/// 把逗号分隔的标签字符串解析成列表。
+List<String> parseTags(String? value) {
+  if (value == null) return const [];
+  return value
+      .split(',')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+}
+
+String encodeTags(Iterable<String> tags) =>
+    tags.map((t) => t.trim()).where((t) => t.isNotEmpty).join(',');
+
 /// 有效阅读速度：手填 > 自动学习 > 全局默认。
 int effectivePace(Book book, AppSetting settings) {
   final measured = book.measuredPagesPerHour;
@@ -145,6 +158,7 @@ class ReadingRepository {
     int currentPage = 0,
     int priority = 2,
     int? manualPagesPerHour,
+    String? tags,
   }) {
     return db.into(db.books).insert(BooksCompanion.insert(
           title: title,
@@ -153,6 +167,7 @@ class ReadingRepository {
           currentPage: Value(currentPage),
           priority: Value(priority),
           manualPagesPerHour: Value(manualPagesPerHour),
+          tags: Value(tags),
         ));
   }
 
