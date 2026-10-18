@@ -110,13 +110,13 @@ ScheduleResult buildSchedule(ScheduleInput input, {DateTime? from}) {
   final byPages = input.dailyPages != null && input.dailyPages! > 0;
 
   ScheduleResult empty() => ScheduleResult(
-        tasks: const [],
-        remainingPages: max(0, remaining),
-        pagesPerReadingDay: 0,
-        capacityPagesPerDay: capacity,
-        readingDays: 0,
-        hasDeadline: hasDeadline,
-      );
+    tasks: const [],
+    remainingPages: max(0, remaining),
+    pagesPerReadingDay: 0,
+    capacityPagesPerDay: capacity,
+    readingDays: 0,
+    hasDeadline: hasDeadline,
+  );
 
   if (remaining <= 0) return empty();
 
@@ -148,12 +148,14 @@ ScheduleResult buildSchedule(ScheduleInput input, {DateTime? from}) {
     final startPage = page + 1;
     final endPage = page + pages;
     final minutes = (pages / input.pagesPerHour * 60).ceil();
-    tasks.add(ScheduledTask(
-      date: day,
-      startPage: startPage,
-      endPage: endPage,
-      plannedMinutes: max(minutes, 1),
-    ));
+    tasks.add(
+      ScheduledTask(
+        date: day,
+        startPage: startPage,
+        endPage: endPage,
+        plannedMinutes: max(minutes, 1),
+      ),
+    );
     page += pages;
   }
 
@@ -178,9 +180,10 @@ List<DateTime> readingDays({
   final s = dateOnly(start);
   final e = dateOnly(end);
   if (s.isAfter(e)) return const [];
-  return dateRange(s, e)
-      .where((d) => weekdays.contains(d.weekday) && !except.contains(d))
-      .toList();
+  return dateRange(
+    s,
+    e,
+  ).where((d) => weekdays.contains(d.weekday) && !except.contains(d)).toList();
 }
 
 /// 计划的进度投影：领先/落后、预计读完。
@@ -256,5 +259,89 @@ PlanProgress computeProgress({
     aheadPages: ahead,
     estimatedFinish: result.estimatedFinish,
     pagesPerReadingDay: result.pagesPerReadingDay,
+  );
+}
+
+/// 基于历史统计的完成时间预估。
+///
+/// 用「平均阅读速度（页/小时）」和「平均每个阅读日的阅读时长」推算每天能读多少页，
+/// 再沿阅读日排到剩余页数读完为止。
+class PaceForecast {
+  const PaceForecast({
+    required this.remainingPages,
+    required this.pagesPerHour,
+    required this.averageDailyMinutes,
+    required this.finish,
+    required this.readingDaysNeeded,
+  });
+
+  final int remainingPages;
+  final double? pagesPerHour;
+  final double? averageDailyMinutes;
+  final DateTime? finish;
+  final int readingDaysNeeded;
+
+  /// 统计样本不足（没有页数或日均时长）时为 false。
+  bool get hasStats =>
+      pagesPerHour != null &&
+      pagesPerHour! > 0 &&
+      averageDailyMinutes != null &&
+      averageDailyMinutes! > 0;
+
+  double? get pagesPerDay =>
+      hasStats ? pagesPerHour! * averageDailyMinutes! / 60 : null;
+}
+
+/// 按统计速度和日均阅读时长估算读完日期。
+///
+/// 没有计划时默认每天都可阅读；有计划时沿用计划的阅读日和休息日。
+PaceForecast forecastAtCurrentPace({
+  required int currentPage,
+  required int totalPages,
+  required double? pagesPerHour,
+  required double? averageDailyMinutes,
+  required Set<int> weekdays,
+  Set<DateTime> restDates = const {},
+  DateTime? now,
+}) {
+  final today = dateOnly(now ?? DateTime.now());
+  final remaining = max<int>(0, totalPages - currentPage);
+
+  PaceForecast result({DateTime? finish, int readingDaysNeeded = 0}) =>
+      PaceForecast(
+        remainingPages: remaining,
+        pagesPerHour: pagesPerHour,
+        averageDailyMinutes: averageDailyMinutes,
+        finish: finish,
+        readingDaysNeeded: readingDaysNeeded,
+      );
+
+  if (remaining <= 0) return result(finish: today);
+  if (pagesPerHour == null ||
+      pagesPerHour <= 0 ||
+      averageDailyMinutes == null ||
+      averageDailyMinutes <= 0) {
+    return result();
+  }
+
+  final dailyMinutes = max<int>(1, averageDailyMinutes.round());
+  final pace = max<int>(1, pagesPerHour.round());
+  final schedule = buildSchedule(
+    ScheduleInput(
+      currentPage: currentPage,
+      totalPages: totalPages,
+      startDate: today,
+      deadline: null,
+      dailyMinutes: dailyMinutes,
+      weekdays: weekdays.isEmpty ? const {1, 2, 3, 4, 5, 6, 7} : weekdays,
+      pagesPerHour: pace,
+      restDates: restDates,
+    ),
+    from: today,
+  );
+
+  return result(
+    finish: schedule.estimatedFinish,
+    readingDaysNeeded: schedule.tasks.length,
   );
 }

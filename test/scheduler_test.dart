@@ -13,16 +13,15 @@ void main() {
     int dailyMinutes = 60,
     Set<int>? weekdays,
     int pace = 30,
-  }) =>
-      ScheduleInput(
-        currentPage: current,
-        totalPages: total,
-        startDate: monday,
-        deadline: deadline,
-        dailyMinutes: dailyMinutes,
-        weekdays: weekdays ?? {1, 2, 3, 4, 5, 6, 7},
-        pagesPerHour: pace,
-      );
+  }) => ScheduleInput(
+    currentPage: current,
+    totalPages: total,
+    startDate: monday,
+    deadline: deadline,
+    dailyMinutes: dailyMinutes,
+    weekdays: weekdays ?? {1, 2, 3, 4, 5, 6, 7},
+    pagesPerHour: pace,
+  );
 
   test('均摊到每个可用阅读日', () {
     // 100 页，5 天（周一到周五，排除周末），每天 60 分钟 × 30 页/小时 = 30 页容量。
@@ -56,7 +55,10 @@ void main() {
       ),
       from: monday,
     );
-    expect(result.tasks.map((t) => t.date.weekday), everyElement(isIn({1, 3, 5})));
+    expect(
+      result.tasks.map((t) => t.date.weekday),
+      everyElement(isIn({1, 3, 5})),
+    );
     expect(result.readingDays, 3);
     expect(result.tasks.first.date, monday);
   });
@@ -226,8 +228,81 @@ void main() {
   });
 
   test('dateRange 跨月末不丢天', () {
-    final days = dateRange(DateTime(2025, 1, 30), DateTime(2025, 2, 2)).toList();
+    final days = dateRange(
+      DateTime(2025, 1, 30),
+      DateTime(2025, 2, 2),
+    ).toList();
     expect(days.length, 4);
     expect(days.last, DateTime(2025, 2, 2));
+  });
+
+  test('按统计速度和日均时长预估完成日期', () {
+    // 30 页/小时 × 60 分钟/天 = 30 页/天；100 页需要 4 个阅读日。
+    final f = forecastAtCurrentPace(
+      currentPage: 0,
+      totalPages: 100,
+      pagesPerHour: 30,
+      averageDailyMinutes: 60,
+      weekdays: const {1, 2, 3, 4, 5, 6, 7},
+      now: monday,
+    );
+    expect(f.hasStats, isTrue);
+    expect(f.pagesPerDay, closeTo(30, 0.001));
+    expect(f.finish, DateTime(2025, 1, 9));
+    expect(f.readingDaysNeeded, 4);
+  });
+
+  test('预估完成日期使用剩余页数和日均时长', () {
+    // 日均 30 分钟 × 30 页/小时 = 15 页/天；还剩 30 页需要 2 天。
+    final f = forecastAtCurrentPace(
+      currentPage: 70,
+      totalPages: 100,
+      pagesPerHour: 30,
+      averageDailyMinutes: 30,
+      weekdays: const {1, 2, 3, 4, 5, 6, 7},
+      now: monday,
+    );
+    expect(f.remainingPages, 30);
+    expect(f.finish, DateTime(2025, 1, 7));
+    expect(f.readingDaysNeeded, 2);
+  });
+
+  test('统计样本不足时不给完成日期', () {
+    final noPace = forecastAtCurrentPace(
+      currentPage: 0,
+      totalPages: 100,
+      pagesPerHour: null,
+      averageDailyMinutes: 30,
+      weekdays: const {1, 2, 3, 4, 5, 6, 7},
+      now: monday,
+    );
+    expect(noPace.hasStats, isFalse);
+    expect(noPace.finish, isNull);
+
+    final noTime = forecastAtCurrentPace(
+      currentPage: 0,
+      totalPages: 100,
+      pagesPerHour: 30,
+      averageDailyMinutes: null,
+      weekdays: const {1, 2, 3, 4, 5, 6, 7},
+      now: monday,
+    );
+    expect(noTime.hasStats, isFalse);
+    expect(noTime.finish, isNull);
+  });
+
+  test('预估完成日期遵守阅读日与休息日', () {
+    // 周一至周五阅读；周三休息；每天 30 页 → 100 页排到周五。
+    final f = forecastAtCurrentPace(
+      currentPage: 0,
+      totalPages: 100,
+      pagesPerHour: 30,
+      averageDailyMinutes: 60,
+      weekdays: const {1, 2, 3, 4, 5},
+      restDates: {DateTime(2025, 1, 8)},
+      now: monday,
+    );
+    expect(f.finish, DateTime(2025, 1, 10));
+    expect(f.readingDaysNeeded, 4);
   });
 }

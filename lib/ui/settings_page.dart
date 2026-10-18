@@ -1,8 +1,13 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:installed_apps/installed_apps.dart';
 
 import '../core/date_x.dart';
+import '../data/backup.dart';
 import '../data/repository.dart';
 import '../services/target_app_service.dart';
 import '../state/providers.dart';
@@ -54,37 +59,147 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       builder: (context) => const _AppPickerSheet(),
     );
     if (selected == null) return;
-    await ref.read(repositoryProvider).updateAutoOpenApp(
+    await ref
+        .read(repositoryProvider)
+        .updateAutoOpenApp(
           enabled: true,
           packageName: selected.packageName,
           appName: selected.name,
         );
   }
 
+  Future<void> _exportData() async {
+    try {
+      final json = await BackupService(ref.read(databaseProvider)).exportJson();
+      final fileName = 'reader-backup-${formatDate(DateTime.now())}.json';
+      final path = await FilePicker.saveFile(
+        dialogTitle: '导出阅历数据',
+        fileName: fileName,
+        type: FileType.custom,
+        allowedExtensions: const ['json'],
+        bytes: Uint8List.fromList(utf8.encode(json)),
+      );
+      if (!mounted) return;
+      if (!kIsWeb && path == null) return; // 用户取消了保存。
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(kIsWeb || path == null ? '已开始下载备份文件' : '数据已导出到 $path'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('导出失败：$e')));
+    }
+  }
+
+  Future<void> _importData() async {
+    final picked = await FilePicker.pickFiles(
+      dialogTitle: '选择阅历备份文件',
+      type: FileType.custom,
+      allowedExtensions: const ['json'],
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    if (!mounted) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('导入数据？'),
+        content: Text(
+          '将用备份文件覆盖当前全部阅读数据（读物、计划、任务、计时记录和设置），'
+          '且无法撤销。\n\n文件：${picked.files.single.name}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('覆盖并导入'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      final file = picked.files.single;
+      final bytes = file.bytes ?? await file.xFile.readAsBytes();
+      final summary = await BackupService(
+        ref.read(databaseProvider),
+      ).importJson(utf8.decode(bytes));
+      if (!mounted) return;
+      // 导入的设置要立刻反映到本页表单，避免随后保存时又把旧值写回去。
+      final restored = await ref.read(databaseProvider).loadSettings();
+      if (!mounted) return;
+      setState(() {
+        _seeded = true;
+        _pace.text = restored.pagesPerHour.toString();
+        _dailyMinutes = restored.defaultDailyMinutes;
+        _minutes.text = '$_dailyMinutes';
+        _weekdays = parseWeekdays(restored.defaultWeekdays);
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('导入完成'),
+          content: Text('已恢复：$summary'),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('好'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('导入失败'),
+          content: Text(e is BackupFormatException ? e.message : '$e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('知道了'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   Future<void> _save() async {
     final pace = int.tryParse(_pace.text.trim());
     if (pace == null || pace <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('阅读速度需要是正整数')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('阅读速度需要是正整数')));
       return;
     }
     final minutes = int.tryParse(_minutes.text.trim());
     if (minutes == null || minutes <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('每天时长需要是正整数')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('每天时长需要是正整数')));
       return;
     }
-    await ref.read(repositoryProvider).updateSettings(
+    await ref
+        .read(repositoryProvider)
+        .updateSettings(
           pagesPerHour: pace,
           defaultDailyMinutes: minutes,
           defaultWeekdays: encodeWeekdays(_weekdays),
         );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('已保存，所有进行中的排期已重算')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已保存，所有进行中的排期已重算')));
       Navigator.of(context).pop();
     }
   }
@@ -103,17 +218,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         children: [
           Text(
             '阅读速度',
-            style: Theme.of(context)
-                .textTheme
-                .labelLarge
-                ?.copyWith(fontWeight: FontWeight.w600),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
             '用于把页数换算成时间。读了几次后可以回来微调，排期会立即重算。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -128,10 +242,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
           Text(
             '默认每天时长',
-            style: Theme.of(context)
-                .textTheme
-                .labelLarge
-                ?.copyWith(fontWeight: FontWeight.w600),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
           ),
           SliderField(
             value: _dailyMinutes,
@@ -145,10 +258,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
           Text(
             '默认阅读日',
-            style: Theme.of(context)
-                .textTheme
-                .labelLarge
-                ?.copyWith(fontWeight: FontWeight.w600),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -169,23 +281,23 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           const SizedBox(height: 24),
           Text(
             '计时时自动打开应用',
-            style: Theme.of(context)
-                .textTheme
-                .labelLarge
-                ?.copyWith(fontWeight: FontWeight.w600),
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 4),
           Text(
             '仅安卓：开始计时时自动打开指定的阅读应用。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: autoOpen,
             onChanged: TargetAppService.isAndroid
-                ? (v) => ref.read(repositoryProvider).updateAutoOpenApp(enabled: v)
+                ? (v) =>
+                      ref.read(repositoryProvider).updateAutoOpenApp(enabled: v)
                 : null,
             title: const Text('自动打开'),
             subtitle: Text(
@@ -198,12 +310,43 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             Align(
               alignment: Alignment.centerLeft,
               child: OutlinedButton.icon(
-                onPressed:
-                    TargetAppService.isAndroid ? _pickTargetApp : null,
+                onPressed: TargetAppService.isAndroid ? _pickTargetApp : null,
                 icon: const Icon(Icons.apps),
                 label: const Text('选择应用'),
               ),
             ),
+          const SizedBox(height: 32),
+          Text(
+            '数据备份',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '导出会生成一个 JSON 备份文件，包含所有读物、计划、任务、计时记录与设置。'
+            '导入会用备份覆盖当前数据。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _exportData,
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text('导出数据'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _importData,
+                icon: const Icon(Icons.download_outlined),
+                label: const Text('导入数据'),
+              ),
+            ],
+          ),
           const SizedBox(height: 32),
           FilledButton.icon(
             onPressed: _save,
@@ -286,14 +429,13 @@ class _AppPickerSheetState extends State<_AppPickerSheet> {
                       final filtered = _query.isEmpty
                           ? apps
                           : apps
-                              .where((a) =>
-                                  a.name.toLowerCase().contains(_query))
-                              .toList();
+                                .where(
+                                  (a) => a.name.toLowerCase().contains(_query),
+                                )
+                                .toList();
                       if (filtered.isEmpty) {
                         return Center(
-                          child: Text(apps.isEmpty
-                              ? '没有找到可启动的应用'
-                              : '没有匹配的应用'),
+                          child: Text(apps.isEmpty ? '没有找到可启动的应用' : '没有匹配的应用'),
                         );
                       }
                       return ListView.builder(
@@ -306,8 +448,10 @@ class _AppPickerSheetState extends State<_AppPickerSheet> {
                               height: 36,
                               child: app.icon == null
                                   ? const Icon(Icons.android)
-                                  : Image.memory(app.icon!,
-                                      fit: BoxFit.contain),
+                                  : Image.memory(
+                                      app.icon!,
+                                      fit: BoxFit.contain,
+                                    ),
                             ),
                             title: Text(app.name),
                             subtitle: Text(

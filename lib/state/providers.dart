@@ -93,6 +93,16 @@ final allSessionsProvider = StreamProvider<List<ReadingSession>>((ref) {
   return ref.watch(repositoryProvider).watchAllSessions();
 });
 
+/// 全部计划（全局统计的预计完成日期用）。
+final allPlansProvider = StreamProvider<List<Plan>>((ref) {
+  return ref.watch(repositoryProvider).watchAllPlans();
+});
+
+/// 全部计划的休息日（按计划 id 分组）。
+final allRestDatesProvider = StreamProvider<Map<int, Set<DateTime>>>((ref) {
+  return ref.watch(repositoryProvider).watchAllRestDates();
+});
+
 /// 某本书的各遍阅读记录。
 final readingsProvider = StreamProvider.family<List<Reading>, int>((ref, bookId) {
   return ref.watch(repositoryProvider).watchReadings(bookId);

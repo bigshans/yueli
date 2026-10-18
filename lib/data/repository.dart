@@ -264,6 +264,20 @@ class ReadingRepository {
         .getSingleOrNull();
   }
 
+  /// 全部计划，用于全局统计中的预计完成日期。
+  Stream<List<Plan>> watchAllPlans() => db.select(db.plans).watch();
+
+  /// 全部计划的休息日，按计划 id 分组。
+  Stream<Map<int, Set<DateTime>>> watchAllRestDates() {
+    return db.select(db.restDays).watch().map((rows) {
+      final result = <int, Set<DateTime>>{};
+      for (final r in rows) {
+        result.putIfAbsent(r.planId, () => <DateTime>{}).add(dateOnly(r.date));
+      }
+      return result;
+    });
+  }
+
   /// 为一本书创建（替换）计划并立即生成每日任务。[deadline] 为空表示不设期限。
   Future<ScheduleResult> savePlan({
     required int bookId,

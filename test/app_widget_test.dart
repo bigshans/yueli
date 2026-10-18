@@ -137,6 +137,8 @@ void main() {
     expect(find.text('全部'), findsWidgets); // 筛选：时间范围
 
     // 切到「明细」后能看到单次记录的时间段
+    await tester.ensureVisible(find.text('明细'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('明细'));
     await settle(tester);
     expect(find.textContaining('20:00'), findsWidgets);
