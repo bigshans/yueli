@@ -1,5 +1,3 @@
-import 'dart:convert';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -70,20 +68,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _exportData() async {
     try {
-      final json = await BackupService(ref.read(databaseProvider)).exportJson();
-      final fileName = 'reader-backup-${formatDate(DateTime.now())}.json';
+      final bytes = await BackupService(
+        ref.read(databaseProvider),
+      ).exportArchiveBytes();
+      final fileName = 'yueli-backup-${formatDate(DateTime.now())}.zip';
       final path = await FilePicker.saveFile(
         dialogTitle: '导出阅历数据',
         fileName: fileName,
         type: FileType.custom,
-        allowedExtensions: const ['json'],
-        bytes: Uint8List.fromList(utf8.encode(json)),
+        allowedExtensions: const ['zip'],
+        bytes: bytes,
       );
       if (!mounted) return;
       if (!kIsWeb && path == null) return; // 用户取消了保存。
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(kIsWeb || path == null ? '已开始下载备份文件' : '数据已导出到 $path'),
+          content: Text(
+            kIsWeb || path == null ? '已开始下载完整备份（含历史 CSV）' : '数据已导出到 $path',
+          ),
         ),
       );
     } catch (e) {
@@ -98,7 +100,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final picked = await FilePicker.pickFiles(
       dialogTitle: '选择阅历备份文件',
       type: FileType.custom,
-      allowedExtensions: const ['json'],
+      allowedExtensions: const ['zip', 'json'],
       withData: true,
     );
     if (picked == null || picked.files.isEmpty) return;
@@ -131,7 +133,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final bytes = file.bytes ?? await file.xFile.readAsBytes();
       final summary = await BackupService(
         ref.read(databaseProvider),
-      ).importJson(utf8.decode(bytes));
+      ).importBytes(bytes, fileName: file.name);
       if (!mounted) return;
       // 导入的设置要立刻反映到本页表单，避免随后保存时又把旧值写回去。
       final restored = await ref.read(databaseProvider).loadSettings();
@@ -324,8 +326,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            '导出会生成一个 JSON 备份文件，包含所有读物、计划、任务、计时记录与设置。'
-            '导入会用备份覆盖当前数据。',
+            '一次导出会生成一个 ZIP 文件：内含可重新导入的完整备份 JSON，'
+            '以及可用 Excel 查看的阅读历史 CSV。'
+            '导入时选择 ZIP 或旧版 JSON 备份即可。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),

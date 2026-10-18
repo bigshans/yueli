@@ -9,6 +9,7 @@ import '../data/repository.dart';
 import '../domain/scheduling/scheduler.dart';
 import '../state/providers.dart';
 import 'stats_page.dart';
+import 'widgets/reading_heatmap.dart';
 import 'widgets/timer_banner.dart';
 
 enum _Range { d7, d30, d90, custom, all }
@@ -109,6 +110,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
               overallFinish: overallFinish,
             ),
             const _ChartMarker(),
+            const _HeatmapMarker(),
             const _FilterMarker(),
           ];
 
@@ -179,6 +181,14 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
                       sessions: filtered,
                     ),
                     onMetric: (m) => setState(() => _metric = m),
+                  );
+                case _HeatmapMarker():
+                  return ReadingHeatmapCard(
+                    sessions: all,
+                    today: now,
+                    metric: _metric == _Metric.pages
+                        ? ReadingHeatmapMetric.pages
+                        : ReadingHeatmapMetric.time,
                   );
                 case _FilterMarker():
                   return _FilterBar(
@@ -398,6 +408,10 @@ class _MetricSummaryData {
 
 class _ChartMarker {
   const _ChartMarker();
+}
+
+class _HeatmapMarker {
+  const _HeatmapMarker();
 }
 
 class _FilterMarker {

@@ -1,7 +1,9 @@
 import 'dart:convert';
 
+import 'package:archive/archive.dart';
 import 'package:drift/drift.dart';
 
+import '../core/date_x.dart';
 import 'database.dart';
 
 /// 备份文件格式不合法（不是阅历导出的 JSON、版本不支持、字段缺失等）。
@@ -52,6 +54,48 @@ class BackupService {
   static const appId = 'reader-management';
   static const formatVersion = 1;
 
+  /// 一次性导出：ZIP 内含完整备份 JSON（可导入）和阅读历史 CSV（可查看）。
+  Future<Uint8List> exportArchiveBytes({DateTime? now}) async {
+    final json = await exportJson(now: now);
+    final csv = await exportSessionsCsv();
+    final archive = Archive()
+      ..addFile(ArchiveFile.string('backup.json', json))
+      ..addFile(ArchiveFile.string('history.csv', csv));
+    return ZipEncoder().encodeBytes(archive);
+  }
+
+  /// 导入 ZIP 备份或旧版 JSON 备份。
+  Future<ImportSummary> importBytes(Uint8List bytes, {String? fileName}) async {
+    final isZip =
+        (fileName?.toLowerCase().endsWith('.zip') ?? false) ||
+        (bytes.length >= 4 &&
+            bytes[0] == 0x50 &&
+            bytes[1] == 0x4b &&
+            bytes[2] == 0x03 &&
+            bytes[3] == 0x04);
+    if (!isZip) return importJson(utf8.decode(bytes));
+
+    final Archive archive;
+    try {
+      archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    } catch (e) {
+      throw BackupFormatException('无法读取备份压缩包：$e');
+    }
+    var entry = archive.find('backup.json');
+    if (entry == null) {
+      for (final file in archive.files) {
+        if (file.name.toLowerCase().endsWith('.json')) {
+          entry = file;
+          break;
+        }
+      }
+    }
+    if (entry == null) {
+      throw BackupFormatException('压缩包中缺少 backup.json，无法导入');
+    }
+    return importJson(utf8.decode(entry.content));
+  }
+
   Future<String> exportJson({DateTime? now}) async {
     final books = await db.select(db.books).get();
     final plans = await db.select(db.plans).get();
@@ -83,6 +127,45 @@ class BackupService {
       },
     });
   }
+
+  /// 导出全部计时历史为 CSV，可直接用 Excel / 表格软件打开。
+  ///
+  /// CSV 仅用于查看和分析，不支持导入；需要恢复数据请使用 JSON 完整备份。
+  Future<String> exportSessionsCsv() async {
+    final books = await db.select(db.books).get();
+    final booksById = {for (final b in books) b.id: b};
+    final sessions = await (db.select(
+      db.readingSessions,
+    )..orderBy([(t) => OrderingTerm.desc(t.startedAt)])).get();
+
+    final buffer = StringBuffer('\uFEFF'); // BOM，避免 Excel 打开中文乱码。
+    buffer.writeln('日期,开始时间,结束时间,书名,轮次,时长(秒),时长(分钟),页数,阅读速度(页/小时)');
+    for (final s in sessions) {
+      final pages = s.pagesRead;
+      final pace = pages != null && pages > 0 && s.durationSeconds > 0
+          ? (pages / (s.durationSeconds / 3600)).toStringAsFixed(1)
+          : '';
+      buffer.writeln(
+        [
+          formatDate(s.startedAt),
+          _clock(s.startedAt),
+          _clock(s.endedAt),
+          _csvCell(booksById[s.bookId]?.title ?? '（已删除）'),
+          s.round.toString(),
+          s.durationSeconds.toString(),
+          (s.durationSeconds / 60).round().toString(),
+          pages?.toString() ?? '',
+          pace,
+        ].join(','),
+      );
+    }
+    return buffer.toString();
+  }
+
+  static String _clock(DateTime d) =>
+      '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+  static String _csvCell(String value) => '"${value.replaceAll('"', '""')}"';
 
   Future<ImportSummary> importJson(String raw) async {
     final Object? decoded;

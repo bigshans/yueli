@@ -19,9 +19,9 @@ void main() {
   });
 
   Widget appWith(AppDatabase db) => ProviderScope(
-        overrides: [databaseProvider.overrideWithValue(db)],
-        child: const ReaderApp(),
-      );
+    overrides: [databaseProvider.overrideWithValue(db)],
+    child: const ReaderApp(),
+  );
 
   // 有界等待：给数据库流和首帧足够时间，但不会被无限动画卡死。
   Future<void> settle(WidgetTester tester) async {
@@ -105,10 +105,12 @@ void main() {
       weekdays: {1, 2, 3, 4, 5, 6, 7},
     );
 
-    await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db)],
-      child: const MaterialApp(home: CalendarPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: CalendarPage()),
+      ),
+    );
     await settle(tester);
 
     expect(find.text('示例书'), findsWidgets);
@@ -127,18 +129,23 @@ void main() {
       now: t0.add(const Duration(minutes: 30)),
     );
 
-    await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db)],
-      child: MaterialApp(home: StatsPage(bookId: id)),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: MaterialApp(home: StatsPage(bookId: id)),
+      ),
+    );
     await settle(tester);
 
     expect(find.text('今日'), findsWidgets);
-    expect(find.text('全部'), findsWidgets); // 筛选：时间范围
 
     // 切到「明细」后能看到单次记录的时间段
-    await tester.ensureVisible(find.text('明细'));
-    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('明细'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('全部'), findsWidgets); // 筛选：时间范围
     await tester.tap(find.text('明细'));
     await settle(tester);
     expect(find.textContaining('20:00'), findsWidgets);
@@ -167,10 +174,12 @@ void main() {
       now: t0.add(const Duration(hours: 1, minutes: 15)),
     );
 
-    await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db)],
-      child: const MaterialApp(home: GlobalStatsPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: GlobalStatsPage()),
+      ),
+    );
     await settle(tester);
 
     expect(find.text('总览'), findsOneWidget);
@@ -201,10 +210,12 @@ void main() {
       tags: encodeTags(['小说']),
     );
 
-    await tester.pumpWidget(ProviderScope(
-      overrides: [databaseProvider.overrideWithValue(db)],
-      child: const MaterialApp(home: BooksPage()),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: BooksPage()),
+      ),
+    );
     await settle(tester);
     expect(find.text('深入浅出'), findsOneWidget);
     expect(find.text('另一本'), findsOneWidget);

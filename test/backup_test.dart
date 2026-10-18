@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:archive/archive.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reader_management/core/date_x.dart';
@@ -103,5 +106,39 @@ void main() {
     final books = await repo.allBooks();
     expect(books.length, 1);
     expect(books.single.id, id);
+  });
+
+  test('CSV 历史包含每次计时记录', () async {
+    await seed();
+    final csv = await backup.exportSessionsCsv();
+
+    expect(csv.startsWith('\uFEFF'), isTrue);
+    expect(csv, contains('日期,开始时间,结束时间,书名,轮次'));
+    expect(csv, contains('备份测试书'));
+    expect(csv, contains('18')); // 本次读到的页数
+    expect(csv.trim().split('\n').length, 2); // 表头 + 一条记录
+  });
+
+  test('ZIP 一次性导出可完整导入，并包含历史 CSV', () async {
+    final id = await seed();
+    final bytes = await backup.exportArchiveBytes();
+
+    expect(bytes.length, greaterThan(0));
+    expect(bytes[0], 0x50); // ZIP 魔数
+    final archive = ZipDecoder().decodeBytes(bytes, verify: true);
+    expect(archive.find('backup.json'), isNotNull);
+    final csv = archive.find('history.csv');
+    expect(csv, isNotNull);
+    expect(utf8.decode(csv!.content), contains('备份测试书'));
+
+    await repo.createBook(title: '临时书', totalPages: 10);
+    final summary = await backup.importBytes(bytes, fileName: 'yueli.zip');
+
+    expect(summary.books, 1);
+    expect(summary.sessions, 1);
+    final books = await repo.allBooks();
+    expect(books.length, 1);
+    expect(books.single.id, id);
+    expect(books.single.title, '备份测试书');
   });
 }
