@@ -93,6 +93,21 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _shelvedMeta = const VerificationMeta(
+    'shelved',
+  );
+  @override
+  late final GeneratedColumn<bool> shelved = GeneratedColumn<bool>(
+    'shelved',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("shelved" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
   static const VerificationMeta _manualPagesPerHourMeta =
       const VerificationMeta('manualPagesPerHour');
   @override
@@ -136,6 +151,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     priority,
     tags,
     round,
+    shelved,
     manualPagesPerHour,
     measuredPagesPerHour,
     createdAt,
@@ -204,6 +220,12 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         round.isAcceptableOrUnknown(data['round']!, _roundMeta),
       );
     }
+    if (data.containsKey('shelved')) {
+      context.handle(
+        _shelvedMeta,
+        shelved.isAcceptableOrUnknown(data['shelved']!, _shelvedMeta),
+      );
+    }
     if (data.containsKey('manual_pages_per_hour')) {
       context.handle(
         _manualPagesPerHourMeta,
@@ -269,6 +291,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.int,
         data['${effectivePrefix}round'],
       )!,
+      shelved: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}shelved'],
+      )!,
       manualPagesPerHour: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}manual_pages_per_hour'],
@@ -308,6 +334,9 @@ class Book extends DataClass implements Insertable<Book> {
   /// 当前是第几遍阅读（重读会递增）。
   final int round;
 
+  /// 是否搁置。搁置后不再生成/展示待读任务，恢复时从当前进度继续排期。
+  final bool shelved;
+
   /// 用户手填的阅读速度（页/小时）。留空则用自动学习值或全局默认。
   final int? manualPagesPerHour;
 
@@ -323,6 +352,7 @@ class Book extends DataClass implements Insertable<Book> {
     required this.priority,
     this.tags,
     required this.round,
+    required this.shelved,
     this.manualPagesPerHour,
     this.measuredPagesPerHour,
     required this.createdAt,
@@ -342,6 +372,7 @@ class Book extends DataClass implements Insertable<Book> {
       map['tags'] = Variable<String>(tags);
     }
     map['round'] = Variable<int>(round);
+    map['shelved'] = Variable<bool>(shelved);
     if (!nullToAbsent || manualPagesPerHour != null) {
       map['manual_pages_per_hour'] = Variable<int>(manualPagesPerHour);
     }
@@ -364,6 +395,7 @@ class Book extends DataClass implements Insertable<Book> {
       priority: Value(priority),
       tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
       round: Value(round),
+      shelved: Value(shelved),
       manualPagesPerHour: manualPagesPerHour == null && nullToAbsent
           ? const Value.absent()
           : Value(manualPagesPerHour),
@@ -388,6 +420,7 @@ class Book extends DataClass implements Insertable<Book> {
       priority: serializer.fromJson<int>(json['priority']),
       tags: serializer.fromJson<String?>(json['tags']),
       round: serializer.fromJson<int>(json['round']),
+      shelved: serializer.fromJson<bool>(json['shelved']),
       manualPagesPerHour: serializer.fromJson<int?>(json['manualPagesPerHour']),
       measuredPagesPerHour: serializer.fromJson<double?>(
         json['measuredPagesPerHour'],
@@ -407,6 +440,7 @@ class Book extends DataClass implements Insertable<Book> {
       'priority': serializer.toJson<int>(priority),
       'tags': serializer.toJson<String?>(tags),
       'round': serializer.toJson<int>(round),
+      'shelved': serializer.toJson<bool>(shelved),
       'manualPagesPerHour': serializer.toJson<int?>(manualPagesPerHour),
       'measuredPagesPerHour': serializer.toJson<double?>(measuredPagesPerHour),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -422,6 +456,7 @@ class Book extends DataClass implements Insertable<Book> {
     int? priority,
     Value<String?> tags = const Value.absent(),
     int? round,
+    bool? shelved,
     Value<int?> manualPagesPerHour = const Value.absent(),
     Value<double?> measuredPagesPerHour = const Value.absent(),
     DateTime? createdAt,
@@ -434,6 +469,7 @@ class Book extends DataClass implements Insertable<Book> {
     priority: priority ?? this.priority,
     tags: tags.present ? tags.value : this.tags,
     round: round ?? this.round,
+    shelved: shelved ?? this.shelved,
     manualPagesPerHour: manualPagesPerHour.present
         ? manualPagesPerHour.value
         : this.manualPagesPerHour,
@@ -456,6 +492,7 @@ class Book extends DataClass implements Insertable<Book> {
       priority: data.priority.present ? data.priority.value : this.priority,
       tags: data.tags.present ? data.tags.value : this.tags,
       round: data.round.present ? data.round.value : this.round,
+      shelved: data.shelved.present ? data.shelved.value : this.shelved,
       manualPagesPerHour: data.manualPagesPerHour.present
           ? data.manualPagesPerHour.value
           : this.manualPagesPerHour,
@@ -477,6 +514,7 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('priority: $priority, ')
           ..write('tags: $tags, ')
           ..write('round: $round, ')
+          ..write('shelved: $shelved, ')
           ..write('manualPagesPerHour: $manualPagesPerHour, ')
           ..write('measuredPagesPerHour: $measuredPagesPerHour, ')
           ..write('createdAt: $createdAt')
@@ -494,6 +532,7 @@ class Book extends DataClass implements Insertable<Book> {
     priority,
     tags,
     round,
+    shelved,
     manualPagesPerHour,
     measuredPagesPerHour,
     createdAt,
@@ -510,6 +549,7 @@ class Book extends DataClass implements Insertable<Book> {
           other.priority == this.priority &&
           other.tags == this.tags &&
           other.round == this.round &&
+          other.shelved == this.shelved &&
           other.manualPagesPerHour == this.manualPagesPerHour &&
           other.measuredPagesPerHour == this.measuredPagesPerHour &&
           other.createdAt == this.createdAt);
@@ -524,6 +564,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<int> priority;
   final Value<String?> tags;
   final Value<int> round;
+  final Value<bool> shelved;
   final Value<int?> manualPagesPerHour;
   final Value<double?> measuredPagesPerHour;
   final Value<DateTime> createdAt;
@@ -536,6 +577,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.priority = const Value.absent(),
     this.tags = const Value.absent(),
     this.round = const Value.absent(),
+    this.shelved = const Value.absent(),
     this.manualPagesPerHour = const Value.absent(),
     this.measuredPagesPerHour = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -549,6 +591,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.priority = const Value.absent(),
     this.tags = const Value.absent(),
     this.round = const Value.absent(),
+    this.shelved = const Value.absent(),
     this.manualPagesPerHour = const Value.absent(),
     this.measuredPagesPerHour = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -563,6 +606,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<int>? priority,
     Expression<String>? tags,
     Expression<int>? round,
+    Expression<bool>? shelved,
     Expression<int>? manualPagesPerHour,
     Expression<double>? measuredPagesPerHour,
     Expression<DateTime>? createdAt,
@@ -576,6 +620,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (priority != null) 'priority': priority,
       if (tags != null) 'tags': tags,
       if (round != null) 'round': round,
+      if (shelved != null) 'shelved': shelved,
       if (manualPagesPerHour != null)
         'manual_pages_per_hour': manualPagesPerHour,
       if (measuredPagesPerHour != null)
@@ -593,6 +638,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<int>? priority,
     Value<String?>? tags,
     Value<int>? round,
+    Value<bool>? shelved,
     Value<int?>? manualPagesPerHour,
     Value<double?>? measuredPagesPerHour,
     Value<DateTime>? createdAt,
@@ -606,6 +652,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       priority: priority ?? this.priority,
       tags: tags ?? this.tags,
       round: round ?? this.round,
+      shelved: shelved ?? this.shelved,
       manualPagesPerHour: manualPagesPerHour ?? this.manualPagesPerHour,
       measuredPagesPerHour: measuredPagesPerHour ?? this.measuredPagesPerHour,
       createdAt: createdAt ?? this.createdAt,
@@ -639,6 +686,9 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (round.present) {
       map['round'] = Variable<int>(round.value);
     }
+    if (shelved.present) {
+      map['shelved'] = Variable<bool>(shelved.value);
+    }
     if (manualPagesPerHour.present) {
       map['manual_pages_per_hour'] = Variable<int>(manualPagesPerHour.value);
     }
@@ -664,6 +714,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('priority: $priority, ')
           ..write('tags: $tags, ')
           ..write('round: $round, ')
+          ..write('shelved: $shelved, ')
           ..write('manualPagesPerHour: $manualPagesPerHour, ')
           ..write('measuredPagesPerHour: $measuredPagesPerHour, ')
           ..write('createdAt: $createdAt')
@@ -4070,6 +4121,7 @@ typedef $$BooksTableCreateCompanionBuilder =
       Value<int> priority,
       Value<String?> tags,
       Value<int> round,
+      Value<bool> shelved,
       Value<int?> manualPagesPerHour,
       Value<double?> measuredPagesPerHour,
       Value<DateTime> createdAt,
@@ -4084,6 +4136,7 @@ typedef $$BooksTableUpdateCompanionBuilder =
       Value<int> priority,
       Value<String?> tags,
       Value<int> round,
+      Value<bool> shelved,
       Value<int?> manualPagesPerHour,
       Value<double?> measuredPagesPerHour,
       Value<DateTime> createdAt,
@@ -4216,6 +4269,11 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
 
   ColumnFilters<int> get round => $composableBuilder(
     column: $table.round,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get shelved => $composableBuilder(
+    column: $table.shelved,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4384,6 +4442,11 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<bool> get shelved => $composableBuilder(
+    column: $table.shelved,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get manualPagesPerHour => $composableBuilder(
     column: $table.manualPagesPerHour,
     builder: (column) => ColumnOrderings(column),
@@ -4436,6 +4499,9 @@ class $$BooksTableAnnotationComposer
 
   GeneratedColumn<int> get round =>
       $composableBuilder(column: $table.round, builder: (column) => column);
+
+  GeneratedColumn<bool> get shelved =>
+      $composableBuilder(column: $table.shelved, builder: (column) => column);
 
   GeneratedColumn<int> get manualPagesPerHour => $composableBuilder(
     column: $table.manualPagesPerHour,
@@ -4592,6 +4658,7 @@ class $$BooksTableTableManager
                 Value<int> priority = const Value.absent(),
                 Value<String?> tags = const Value.absent(),
                 Value<int> round = const Value.absent(),
+                Value<bool> shelved = const Value.absent(),
                 Value<int?> manualPagesPerHour = const Value.absent(),
                 Value<double?> measuredPagesPerHour = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -4604,6 +4671,7 @@ class $$BooksTableTableManager
                 priority: priority,
                 tags: tags,
                 round: round,
+                shelved: shelved,
                 manualPagesPerHour: manualPagesPerHour,
                 measuredPagesPerHour: measuredPagesPerHour,
                 createdAt: createdAt,
@@ -4618,6 +4686,7 @@ class $$BooksTableTableManager
                 Value<int> priority = const Value.absent(),
                 Value<String?> tags = const Value.absent(),
                 Value<int> round = const Value.absent(),
+                Value<bool> shelved = const Value.absent(),
                 Value<int?> manualPagesPerHour = const Value.absent(),
                 Value<double?> measuredPagesPerHour = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -4630,6 +4699,7 @@ class $$BooksTableTableManager
                 priority: priority,
                 tags: tags,
                 round: round,
+                shelved: shelved,
                 manualPagesPerHour: manualPagesPerHour,
                 measuredPagesPerHour: measuredPagesPerHour,
                 createdAt: createdAt,

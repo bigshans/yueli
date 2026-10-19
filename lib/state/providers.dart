@@ -93,6 +93,13 @@ final allSessionsProvider = StreamProvider<List<ReadingSession>>((ref) {
   return ref.watch(repositoryProvider).watchAllSessions();
 });
 
+/// [from, to] 日期范围内的计时记录（日历用）。
+final sessionsInRangeProvider =
+    StreamProvider.family<List<ReadingSession>, (DateTime, DateTime)>(
+        (ref, range) {
+  return ref.watch(repositoryProvider).watchSessionsBetween(range.$1, range.$2);
+});
+
 /// 全部计划（全局统计的预计完成日期用）。
 final allPlansProvider = StreamProvider<List<Plan>>((ref) {
   return ref.watch(repositoryProvider).watchAllPlans();

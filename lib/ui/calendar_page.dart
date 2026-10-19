@@ -6,6 +6,7 @@ import '../data/database.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'widgets/task_card.dart';
+import 'widgets/timer_banner.dart';
 
 /// 为每本书分配一个稳定颜色，让日历里的书名更好区分。
 const List<Color> _bookPalette = [
@@ -39,6 +40,9 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     final first = DateTime(_month.year, _month.month, 1);
     final last = DateTime(_month.year, _month.month + 1, 0);
     final tasksAsync = ref.watch(tasksInRangeProvider((first, last)));
+    final sessionsAsync = ref.watch(sessionsInRangeProvider((first, last)));
+    final books = ref.watch(booksProvider).valueOrNull ?? const <Book>[];
+    final booksById = {for (final b in books) b.id: b};
 
     return Scaffold(
       appBar: AppBar(title: const Text('日历')),
@@ -51,15 +55,31 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('出错了：$e')),
               data: (tasks) {
-                final byDay = <String, List<TaskWithBook>>{};
+                final sessions =
+                    sessionsAsync.valueOrNull ?? const <ReadingSession>[];
+                final tasksByDay = <String, List<TaskWithBook>>{};
                 for (final t in tasks) {
-                  byDay.putIfAbsent(formatDate(t.task.date), () => []).add(t);
+                  tasksByDay
+                      .putIfAbsent(formatDate(t.task.date), () => [])
+                      .add(t);
+                }
+                final sessionsByDay = <String, List<ReadingSession>>{};
+                for (final s in sessions) {
+                  sessionsByDay
+                      .putIfAbsent(formatDate(s.startedAt), () => [])
+                      .add(s);
                 }
                 return _MonthGrid(
                   month: _month,
-                  byDay: byDay,
-                  onTapDay: (day) =>
-                      _showDay(day, byDay[formatDate(day)] ?? []),
+                  tasksByDay: tasksByDay,
+                  sessionsByDay: sessionsByDay,
+                  booksById: booksById,
+                  onTapDay: (day) => _showDay(
+                    day,
+                    tasksByDay[formatDate(day)] ?? const [],
+                    sessionsByDay[formatDate(day)] ?? const [],
+                    booksById,
+                  ),
                 );
               },
             ),
@@ -69,73 +89,193 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     );
   }
 
-  void _showDay(DateTime day, List<TaskWithBook> tasks) {
-    // 按书分组
-    final grouped = <int, List<TaskWithBook>>{};
-    final books = <int, Book>{};
+  void _showDay(
+    DateTime day,
+    List<TaskWithBook> tasks,
+    List<ReadingSession> sessions,
+    Map<int, Book> booksById,
+  ) {
+    final taskGroups = <int, List<TaskWithBook>>{};
+    final taskBooks = <int, Book>{};
     for (final t in tasks) {
-      grouped.putIfAbsent(t.book.id, () => []).add(t);
-      books[t.book.id] = t.book;
+      taskGroups.putIfAbsent(t.book.id, () => []).add(t);
+      taskBooks[t.book.id] = t.book;
     }
+    final sessionGroups = <int, List<ReadingSession>>{};
+    for (final s in sessions) {
+      sessionGroups.putIfAbsent(s.bookId, () => []).add(s);
+    }
+    final allBooks = <int, Book>{...booksById, ...taskBooks};
 
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
-      builder: (context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              formatDateCn(day),
-              style: Theme.of(context)
-                  .textTheme
-                  .titleMedium
-                  ?.copyWith(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 8),
-            if (tasks.isEmpty)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text('这天没有排期'),
-              )
-            else
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final entry in grouped.entries) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8, bottom: 2),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 10,
-                              height: 10,
-                              decoration: BoxDecoration(
-                                color: bookColor(entry.key),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              books[entry.key]?.title ?? '',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                          ],
-                        ),
-                      ),
-                      for (final t in entry.value) TaskCard(item: t),
-                    ],
-                  ],
+      isScrollControlled: true,
+      useSafeArea: true,
+      constraints: const BoxConstraints(maxWidth: double.infinity),
+      builder: (context) => SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                formatDateCn(day),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${tasks.length} 项排期 · ${sessions.length} 次阅读记录',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-          ],
+              const SizedBox(height: 8),
+              if (tasks.isEmpty && sessions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: Text('这天没有排期或阅读记录')),
+                )
+              else
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: [
+                      if (tasks.isNotEmpty) ...[
+                        const _SheetSectionTitle('排期'),
+                        for (final entry in taskGroups.entries) ...[
+                          _BookGroupHeader(
+                            bookId: entry.key,
+                            title: taskBooks[entry.key]?.title ?? '（已删除）',
+                          ),
+                          for (final t in entry.value) TaskCard(item: t),
+                        ],
+                      ],
+                      if (sessions.isNotEmpty) ...[
+                        const _SheetSectionTitle('阅读记录'),
+                        for (final entry in sessionGroups.entries) ...[
+                          _BookGroupHeader(
+                            bookId: entry.key,
+                            title: allBooks[entry.key]?.title ?? '（已删除）',
+                          ),
+                          for (final s in entry.value) _SessionTile(session: s),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _SheetSectionTitle extends StatelessWidget {
+  const _SheetSectionTitle(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, bottom: 4),
+      child: Text(
+        text,
+        style: Theme.of(
+          context,
+        ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _BookGroupHeader extends StatelessWidget {
+  const _BookGroupHeader({required this.bookId, required this.title});
+  final int bookId;
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 2),
+      child: Row(
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: bookColor(bookId),
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionTile extends StatelessWidget {
+  const _SessionTile({required this.session});
+  final ReadingSession session;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final pages = session.pagesRead;
+    String hm(DateTime d) =>
+        '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.timer_outlined, size: 18, color: scheme.primary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${hm(session.startedAt)}–${hm(session.endedAt)}',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  '${formatDuration(session.durationSeconds)}'
+                  '${pages != null ? ' · $pages 页' : ''}'
+                  '${session.round > 1 ? ' · 第 ${session.round} 遍' : ''}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -160,10 +300,9 @@ class _MonthHeader extends StatelessWidget {
             child: Center(
               child: Text(
                 '${month.year} 年 ${month.month} 月',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
               ),
             ),
           ),
@@ -182,14 +321,16 @@ class _WeekdayHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     const names = ['一', '二', '三', '四', '五', '六', '日'];
     final style = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        );
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8),
       child: Row(
         children: [
           for (final n in names)
-            Expanded(child: Center(child: Text(n, style: style))),
+            Expanded(
+              child: Center(child: Text(n, style: style)),
+            ),
         ],
       ),
     );
@@ -199,12 +340,16 @@ class _WeekdayHeader extends StatelessWidget {
 class _MonthGrid extends StatelessWidget {
   const _MonthGrid({
     required this.month,
-    required this.byDay,
+    required this.tasksByDay,
+    required this.sessionsByDay,
+    required this.booksById,
     required this.onTapDay,
   });
 
   final DateTime month;
-  final Map<String, List<TaskWithBook>> byDay;
+  final Map<String, List<TaskWithBook>> tasksByDay;
+  final Map<String, List<ReadingSession>> sessionsByDay;
+  final Map<int, Book> booksById;
   final void Function(DateTime) onTapDay;
 
   @override
@@ -220,12 +365,17 @@ class _MonthGrid extends StatelessWidget {
     }
     for (var d = 1; d <= daysInMonth; d++) {
       final day = DateTime(month.year, month.month, d);
-      cells.add(_DayCell(
-        day: day,
-        tasks: byDay[formatDate(day)] ?? const [],
-        isToday: day == today0,
-        onTap: () => onTapDay(day),
-      ));
+      final key = formatDate(day);
+      cells.add(
+        _DayCell(
+          day: day,
+          tasks: tasksByDay[key] ?? const [],
+          sessions: sessionsByDay[key] ?? const [],
+          booksById: booksById,
+          isToday: day == today0,
+          onTap: () => onTapDay(day),
+        ),
+      );
     }
 
     return GridView.count(
@@ -241,12 +391,16 @@ class _DayCell extends StatelessWidget {
   const _DayCell({
     required this.day,
     required this.tasks,
+    required this.sessions,
+    required this.booksById,
     required this.isToday,
     required this.onTap,
   });
 
   final DateTime day;
   final List<TaskWithBook> tasks;
+  final List<ReadingSession> sessions;
+  final Map<int, Book> booksById;
   final bool isToday;
   final VoidCallback onTap;
 
@@ -255,13 +409,17 @@ class _DayCell extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final allDone =
         tasks.isNotEmpty && tasks.every((t) => t.task.status == 'done');
-    final hasSkipped =
-        tasks.any((t) => t.task.status == 'skipped') && !allDone;
+    final hasSkipped = tasks.any((t) => t.task.status == 'skipped') && !allDone;
+    final recordOnly = tasks.isEmpty && sessions.isNotEmpty;
 
-    // 当天的书（去重、保序）。
+    // 当天出现过的书（排期优先，阅读记录补充，去重保序）。
     final books = <int, Book>{};
     for (final t in tasks) {
       books[t.book.id] = t.book;
+    }
+    for (final s in sessions) {
+      final book = booksById[s.bookId];
+      if (book != null) books[s.bookId] = book;
     }
     final bookList = books.values.toList();
     final shown = bookList.take(2).toList();
@@ -272,6 +430,8 @@ class _DayCell extends StatelessWidget {
       tint = allDone
           ? scheme.primary
           : (hasSkipped ? scheme.tertiary : scheme.secondary);
+    } else if (recordOnly) {
+      tint = scheme.secondary;
     }
 
     return InkWell(
@@ -282,7 +442,9 @@ class _DayCell extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(10),
-          border: isToday ? Border.all(color: scheme.primary, width: 1.5) : null,
+          border: isToday
+              ? Border.all(color: scheme.primary, width: 1.5)
+              : null,
           color: tint?.withValues(alpha: 0.10),
         ),
         child: Column(
@@ -300,7 +462,9 @@ class _DayCell extends StatelessWidget {
                 ),
                 const Spacer(),
                 if (allDone)
-                  Icon(Icons.check_circle, size: 11, color: scheme.primary),
+                  Icon(Icons.check_circle, size: 11, color: scheme.primary)
+                else if (recordOnly)
+                  Icon(Icons.auto_stories, size: 10, color: scheme.secondary),
               ],
             ),
             const SizedBox(height: 2),
@@ -316,8 +480,7 @@ class _DayCell extends StatelessWidget {
                     height: 1.15,
                     fontWeight: FontWeight.w600,
                     color: bookColor(b.id),
-                    decoration:
-                        allDone ? TextDecoration.lineThrough : null,
+                    decoration: allDone ? TextDecoration.lineThrough : null,
                   ),
                 ),
               ),

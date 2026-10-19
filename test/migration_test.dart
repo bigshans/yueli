@@ -36,7 +36,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle()
         .then((r) => r.read<int>('user_version'));
-    expect(version, 10);
+    expect(version, 11);
 
     // 回填的轮次记录应存在。
     final rounds = await (db.select(db.readings)

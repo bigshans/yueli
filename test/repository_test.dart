@@ -58,14 +58,14 @@ void main() {
     expect(doneToday.length, 1);
     expect(doneToday.first.task.status, 'done');
     // 不会在已完成当天再塞新任务
-    expect(after.where((t) => t.task.date == today() && t.task.status == 'pending'),
-        isEmpty);
+    expect(
+      after.where((t) => t.task.date == today() && t.task.status == 'pending'),
+      isEmpty,
+    );
     // 剩余页数被重新摊到之后的日子
-    final pendingPages =
-        after.where((t) => t.task.status == 'pending').fold<int>(
-              0,
-              (s, t) => s + (t.task.endPage - t.task.startPage + 1),
-            );
+    final pendingPages = after
+        .where((t) => t.task.status == 'pending')
+        .fold<int>(0, (s, t) => s + (t.task.endPage - t.task.startPage + 1));
     expect(pendingPages, 100 - first.task.endPage);
   });
 
@@ -230,7 +230,10 @@ void main() {
     var settings = await db.loadSettings();
     expect(effectivePace(book!, settings), 40); // 自动学习
 
-    await repo.updateBook(id, const BooksCompanion(manualPagesPerHour: Value(15)));
+    await repo.updateBook(
+      id,
+      const BooksCompanion(manualPagesPerHour: Value(15)),
+    );
     book = await repo.getBook(id);
     settings = await db.loadSettings();
     expect(effectivePace(book!, settings), 15); // 手动覆盖
@@ -429,10 +432,7 @@ void main() {
     expect(tasks.any((t) => t.task.date == restDate), isFalse);
     expect(await repo.restDates(plan.id), contains(restDate));
     // 100 页摊到剩余 4 天 → 25 页/天
-    expect(
-      tasks.first.task.endPage - tasks.first.task.startPage + 1,
-      25,
-    );
+    expect(tasks.first.task.endPage - tasks.first.task.startPage + 1, 25);
   });
 
   test('先计时后选书：结束后补选书本并记录', () async {
@@ -544,5 +544,32 @@ void main() {
     );
     final stats = await repo.bookStats(id);
     expect(stats.totalSeconds, 1500);
+  });
+
+  test('搁置后隐藏任务并停止计时，恢复后重新排期', () async {
+    final id = await repo.createBook(title: '搁置书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    expect(await repo.tasksBetween(today(), addDays(today(), 4)), isNotEmpty);
+
+    await repo.startTimer(
+      bookId: id,
+      now: today().add(const Duration(hours: 9)),
+    );
+    await repo.setBookShelved(id, true);
+
+    expect((await repo.getBook(id))!.shelved, isTrue);
+    expect(await repo.activeTimer(), isNull);
+    expect(await repo.tasksBetween(today(), addDays(today(), 4)), isEmpty);
+
+    await repo.setBookShelved(id, false);
+
+    expect((await repo.getBook(id))!.shelved, isFalse);
+    expect(await repo.tasksBetween(today(), addDays(today(), 4)), isNotEmpty);
   });
 }

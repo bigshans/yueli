@@ -42,9 +42,9 @@ class _BooksPageState extends ConsumerState<BooksPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('书架')),
       floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const BookFormPage()),
-        ),
+        onPressed: () => Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const BookFormPage())),
         icon: const Icon(Icons.add),
         label: const Text('添加读物'),
       ),
@@ -86,17 +86,18 @@ class _BooksPageState extends ConsumerState<BooksPage> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.auto_stories_outlined,
-                              size: 56, color: scheme.outline),
+                          Icon(
+                            Icons.auto_stories_outlined,
+                            size: 56,
+                            color: scheme.outline,
+                          ),
                           const SizedBox(height: 16),
                           const Text('书架还是空的'),
                           const SizedBox(height: 8),
                           Text(
                             '添加一本读物，设定截止日和每天可用的时间，\n就能自动排出每天读多少页。',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
+                            style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(color: scheme.onSurfaceVariant),
                           ),
                         ],
@@ -138,17 +139,16 @@ class _BookTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final planAsync = ref.watch(planForBookProvider(book.id));
-    final progress =
-        book.totalPages == 0 ? 0.0 : book.currentPage / book.totalPages;
+    final progress = book.totalPages == 0
+        ? 0.0
+        : book.currentPage / book.totalPages;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
         onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => BookDetailPage(bookId: book.id),
-          ),
+          MaterialPageRoute(builder: (_) => BookDetailPage(bookId: book.id)),
         ),
         child: Padding(
           padding: const EdgeInsets.all(14),
@@ -162,19 +162,52 @@ class _BookTile extends ConsumerWidget {
                       book.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                  _PriorityBadge(label: _priorityLabel, priority: book.priority),
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 32,
+                      minHeight: 32,
+                    ),
+                    tooltip: book.shelved ? '恢复阅读' : '搁置',
+                    icon: Icon(
+                      book.shelved
+                          ? Icons.play_circle_outline
+                          : Icons.pause_circle_outline,
+                      size: 20,
+                    ),
+                    onPressed: () async {
+                      final next = !book.shelved;
+                      await ref
+                          .read(repositoryProvider)
+                          .setBookShelved(book.id, next);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(next ? '已搁置，恢复后会从当前进度继续排期' : '已恢复阅读'),
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  _PriorityBadge(
+                    label: _priorityLabel,
+                    priority: book.priority,
+                  ),
                 ],
               ),
               if (book.author != null && book.author!.isNotEmpty) ...[
                 const SizedBox(height: 2),
                 Text(
                   book.author!,
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
               if (parseTags(book.tags).isNotEmpty) ...[
@@ -186,7 +219,9 @@ class _BookTile extends ConsumerWidget {
                     for (final t in parseTags(book.tags))
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 2),
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         decoration: BoxDecoration(
                           color: theme.colorScheme.secondaryContainer,
                           borderRadius: BorderRadius.circular(8),
@@ -220,11 +255,20 @@ class _BookTile extends ConsumerWidget {
                   ),
                   const Spacer(),
                   planAsync.maybeWhen(
-                    data: (plan) => plan == null
+                    data: (plan) => book.shelved
+                        ? Text(
+                            '已搁置',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.tertiary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          )
+                        : plan == null
                         ? Text(
                             '未排期',
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(color: theme.colorScheme.outline),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
                           )
                         : Text(
                             plan.deadline == null
@@ -269,7 +313,11 @@ class _PriorityBadge extends StatelessWidget {
       ),
       child: Text(
         '$label优先级',
-        style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }

@@ -133,6 +133,7 @@ class ReadingRepository {
   Stream<List<Book>> watchBooks() {
     return (db.select(db.books)
           ..orderBy([
+            (t) => OrderingTerm.asc(t.shelved),
             (t) => OrderingTerm.asc(t.priority),
             (t) => OrderingTerm.desc(t.createdAt),
           ]))
@@ -189,6 +190,33 @@ class ReadingRepository {
 
   Future<void> deleteBook(int id) async {
     await (db.delete(db.books)..where((t) => t.id.equals(id))).go();
+  }
+
+  /// 搁置 / 恢复一本书。
+  ///
+  /// 搁置会停止这本书的计时并清掉所有待读任务；恢复时从当前进度重新排期。
+  Future<void> setBookShelved(int bookId, bool shelved) async {
+    final book = await getBook(bookId);
+    if (book == null || book.shelved == shelved) return;
+
+    if (shelved) {
+      final settings = await db.loadSettings();
+      if (settings.activeBookId == bookId) await cancelTimer();
+    }
+
+    await (db.update(db.books)..where((t) => t.id.equals(bookId)))
+        .write(BooksCompanion(shelved: Value(shelved)));
+
+    final plan = await getPlanForBook(bookId);
+    if (plan == null) return;
+    if (shelved) {
+      await (db.delete(db.tasks)
+            ..where((t) =>
+                t.planId.equals(plan.id) & t.status.equals('pending')))
+          .go();
+    } else {
+      await reschedulePlan(plan.id);
+    }
   }
 
   // ---------- 重读 / 轮次 ----------
@@ -345,6 +373,13 @@ class ReadingRepository {
     if (plan == null) return _emptyResult;
     final book = await getBook(plan.bookId);
     if (book == null) return _emptyResult;
+    if (book.shelved) {
+      await (db.delete(db.tasks)
+            ..where((t) =>
+                t.planId.equals(planId) & t.status.equals('pending')))
+          .go();
+      return _emptyResult;
+    }
 
     await (db.delete(db.tasks)
           ..where((t) => t.planId.equals(planId) & t.status.equals('pending')))
@@ -432,7 +467,8 @@ class ReadingRepository {
     return db.select(db.tasks).join([
       innerJoin(db.books, db.books.id.equalsExp(db.tasks.bookId)),
     ])
-      ..where(db.tasks.date.isBetweenValues(dateOnly(from), dateOnly(to)))
+      ..where(db.tasks.date.isBetweenValues(dateOnly(from), dateOnly(to)) &
+          db.books.shelved.equals(false))
       ..orderBy([
         OrderingTerm.asc(db.tasks.date),
         OrderingTerm.asc(db.tasks.id),
@@ -769,6 +805,21 @@ class ReadingRepository {
   Stream<List<ReadingSession>> watchAllSessions() {
     return (db.select(db.readingSessions)
           ..orderBy([(t) => OrderingTerm.desc(t.startedAt)]))
+        .watch();
+  }
+
+  /// [from, to] 日期范围内开始的计时记录。
+  Stream<List<ReadingSession>> watchSessionsBetween(
+    DateTime from,
+    DateTime to,
+  ) {
+    final start = dateOnly(from);
+    final end = addDays(dateOnly(to), 1);
+    return (db.select(db.readingSessions)
+          ..where((t) =>
+              t.startedAt.isBiggerOrEqualValue(start) &
+              t.startedAt.isSmallerThanValue(end))
+          ..orderBy([(t) => OrderingTerm.asc(t.startedAt)]))
         .watch();
   }
 

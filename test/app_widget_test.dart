@@ -113,7 +113,44 @@ void main() {
     );
     await settle(tester);
 
+    await tester.drag(find.byType(GridView), const Offset(0, -220));
+    await settle(tester);
     expect(find.text('示例书'), findsWidgets);
+    await unmount(tester);
+  });
+
+  testWidgets('日历：无排期但有阅读记录也会展示活动，弹窗铺满宽度', (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repo = ReadingRepository(db);
+    final id = await repo.createBook(title: '记录书', totalPages: 100);
+    final recordDay = DateTime(today().year, today().month, 1);
+    final t0 = recordDay.add(const Duration(hours: 9));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(
+      reachedPage: 10,
+      now: t0.add(const Duration(minutes: 30)),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: CalendarPage()),
+      ),
+    );
+    await settle(tester);
+
+    await tester.tap(find.text('${recordDay.day}').first);
+    await settle(tester);
+
+    expect(find.text('阅读记录'), findsOneWidget);
+    expect(find.text('记录书'), findsWidgets);
+    final width = tester.getSize(find.byType(BottomSheet)).width;
+    expect(
+      width,
+      tester.view.physicalSize.width / tester.view.devicePixelRatio,
+    );
+
     await unmount(tester);
   });
 

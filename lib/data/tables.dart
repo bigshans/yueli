@@ -19,6 +19,9 @@ class Books extends Table {
   /// 当前是第几遍阅读（重读会递增）。
   IntColumn get round => integer().withDefault(const Constant(1))();
 
+  /// 是否搁置。搁置后不再生成/展示待读任务，恢复时从当前进度继续排期。
+  BoolColumn get shelved => boolean().withDefault(const Constant(false))();
+
   /// 用户手填的阅读速度（页/小时）。留空则用自动学习值或全局默认。
   IntColumn get manualPagesPerHour => integer().nullable()();
 

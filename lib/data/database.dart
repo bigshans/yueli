@@ -13,7 +13,7 @@ class AppDatabase extends _$AppDatabase {
   static QueryExecutor _open() => driftDatabase(name: 'reader_management');
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -31,6 +31,7 @@ class AppDatabase extends _$AppDatabase {
           await _addColumnIfMissing(m, books, books.measuredPagesPerHour);
           await _addColumnIfMissing(m, books, books.round);
           await _addColumnIfMissing(m, books, books.tags);
+          await _addColumnIfMissing(m, books, books.shelved);
 
           // plans.deadline 早期为 NOT NULL，需要重建表改为可空。
           if (await _hasTable('plans') &&

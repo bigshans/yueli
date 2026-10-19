@@ -22,9 +22,8 @@ class BookDetailPage extends ConsumerWidget {
     final planAsync = ref.watch(planForBookProvider(bookId));
 
     return bookAsync.when(
-      loading: () => const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      ),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(body: Center(child: Text('出错了：$e'))),
       data: (book) {
         if (book == null) {
@@ -48,6 +47,15 @@ class BookDetailPage extends ConsumerWidget {
           appBar: AppBar(
             title: const Text('读物详情'),
             actions: [
+              IconButton(
+                tooltip: book.shelved ? '恢复阅读' : '搁置',
+                icon: Icon(
+                  book.shelved
+                      ? Icons.play_circle_outline
+                      : Icons.pause_circle_outline,
+                ),
+                onPressed: () => _toggleShelved(context, ref, book),
+              ),
               IconButton(
                 tooltip: '编辑',
                 icon: const Icon(Icons.edit_outlined),
@@ -102,10 +110,9 @@ class BookDetailPage extends ConsumerWidget {
               if (tasks.isNotEmpty) ...[
                 Text(
                   '即将到来的阅读任务',
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelLarge
-                      ?.copyWith(fontWeight: FontWeight.w600),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 4),
                 for (final t in tasks) TaskCard(item: t, showDate: true),
@@ -116,6 +123,20 @@ class BookDetailPage extends ConsumerWidget {
         );
       },
     );
+  }
+
+  Future<void> _toggleShelved(
+    BuildContext context,
+    WidgetRef ref,
+    Book book,
+  ) async {
+    final next = !book.shelved;
+    await ref.read(repositoryProvider).setBookShelved(book.id, next);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(next ? '已搁置，恢复后会从当前进度继续排期' : '已恢复阅读')),
+      );
+    }
   }
 
   Future<void> _confirmDelete(
@@ -157,22 +178,25 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final progress =
-        book.totalPages == 0 ? 0.0 : book.currentPage / book.totalPages;
+    final progress = book.totalPages == 0
+        ? 0.0
+        : book.currentPage / book.totalPages;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           book.title,
-          style: theme.textTheme.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w700),
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
         ),
         if (book.author != null && book.author!.isNotEmpty) ...[
           const SizedBox(height: 4),
           Text(
             book.author!,
-            style: theme.textTheme.bodyMedium
-                ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
           ),
         ],
         if (parseTags(book.tags).isNotEmpty) ...[
@@ -183,8 +207,10 @@ class _Header extends StatelessWidget {
             children: [
               for (final t in parseTags(book.tags))
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: theme.colorScheme.secondaryContainer,
                     borderRadius: BorderRadius.circular(8),
@@ -198,6 +224,24 @@ class _Header extends StatelessWidget {
                   ),
                 ),
             ],
+          ),
+        ],
+        if (book.shelved) ...[
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.tertiaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              '已搁置，不再安排每日任务',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: theme.colorScheme.onTertiaryContainer,
+              ),
+            ),
           ),
         ],
         const SizedBox(height: 16),
@@ -235,10 +279,9 @@ class _SectionCard extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .labelLarge
-                  ?.copyWith(fontWeight: FontWeight.w600),
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 12),
             child,
@@ -262,15 +305,13 @@ class _NoPlan extends StatelessWidget {
           '还没有排期。设置截止日和每天可用的时间，'
           '系统会把剩余页数自动摊到每一天。',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 12),
         FilledButton.icon(
           onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => PlanEditorPage(bookId: book.id),
-            ),
+            MaterialPageRoute(builder: (_) => PlanEditorPage(bookId: book.id)),
           ),
           icon: const Icon(Icons.event_available),
           label: const Text('创建排期'),
@@ -292,12 +333,14 @@ class _PlanSummary extends ConsumerWidget {
     final restDates =
         ref.watch(restDatesProvider(plan.id)).valueOrNull ?? const <DateTime>{};
     final oversub = plan.status == 'oversubscribed';
-    final statusText = switch (plan.status) {
-      'completed' => '已完成',
-      'oversubscribed' => '排不下：期限内读不完',
-      'archived' => '已归档',
-      _ => '进行中',
-    };
+    final statusText = book.shelved
+        ? '已搁置'
+        : switch (plan.status) {
+            'completed' => '已完成',
+            'oversubscribed' => '排不下：期限内读不完',
+            'archived' => '已归档',
+            _ => '进行中',
+          };
     final weekdays = parseWeekdays(plan.weekdays);
     const names = {1: '一', 2: '二', 3: '三', 4: '四', 5: '五', 6: '六', 7: '日'};
 
@@ -321,10 +364,8 @@ class _PlanSummary extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row('状态', statusText,
-            color: oversub ? theme.colorScheme.error : null),
-        _row('截止',
-            plan.deadline == null ? '不设期限' : formatDate(plan.deadline!)),
+        _row('状态', statusText, color: oversub ? theme.colorScheme.error : null),
+        _row('截止', plan.deadline == null ? '不设期限' : formatDate(plan.deadline!)),
         if (plan.dailyPages != null)
           _row('每天页数', '${plan.dailyPages} 页')
         else
@@ -351,8 +392,9 @@ class _PlanSummary extends ConsumerWidget {
             child: Text(
               '按当前速度和每天时长，截止日前读不完。'
               '可以延长截止日、增加每天时长，或在设置里调高阅读速度。',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.onErrorContainer),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
             ),
           ),
         ],
@@ -436,8 +478,8 @@ class _RestDaysDialog extends ConsumerWidget {
               '休息日不安排阅读；多读的页数会优先抵消它们，'
               '抵消满一天，那天就轻松了。',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 12),
             if (sorted.isEmpty)
@@ -450,8 +492,9 @@ class _RestDaysDialog extends ConsumerWidget {
                   for (final d in sorted)
                     Chip(
                       label: Text(formatDate(d)),
-                      onDeleted: () =>
-                          ref.read(repositoryProvider).removeRestDay(plan.id, d),
+                      onDeleted: () => ref
+                          .read(repositoryProvider)
+                          .removeRestDay(plan.id, d),
                     ),
                 ],
               ),
@@ -518,29 +561,29 @@ class _Stats extends ConsumerWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _row(
-            '今日',
-            todayStat == null
-                ? '暂无记录'
-                : '${formatMinutes(todayStat.minutes)} · ${todayStat.pages} 页 · ${todayStat.sessions} 次'),
+          '今日',
+          todayStat == null
+              ? '暂无记录'
+              : '${formatMinutes(todayStat.minutes)} · ${todayStat.pages} 页 · ${todayStat.sessions} 次',
+        ),
         _row('计时次数', '${s?.sessionCount ?? 0} 次'),
         _row('累计时长', formatMinutes(((s?.totalSeconds ?? 0) / 60).round())),
         _row('累计页数', '${s?.totalPages ?? 0} 页'),
-        _row('平均速度',
-            avg == null ? '数据不足' : '${avg.toStringAsFixed(1)} 页/小时'),
+        _row('平均速度', avg == null ? '数据不足' : '${avg.toStringAsFixed(1)} 页/小时'),
         _row(
-            '平均单次',
-            s?.averageSessionMinutes == null
-                ? '数据不足'
-                : '${s!.averageSessionMinutes!.toStringAsFixed(0)} 分钟/次'),
-        _row('排期采用',
-            '${effectivePace(book, settings)} 页/小时（$source）'),
+          '平均单次',
+          s?.averageSessionMinutes == null
+              ? '数据不足'
+              : '${s!.averageSessionMinutes!.toStringAsFixed(0)} 分钟/次',
+        ),
+        _row('排期采用', '${effectivePace(book, settings)} 页/小时（$source）'),
         const SizedBox(height: 8),
         Text(
           '设置手动速度会覆盖自动学习值；否则用计时数据的平均值，'
           '估算会随着记录越来越准。',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
       ],
     );
@@ -588,8 +631,8 @@ class _RecentHistory extends ConsumerWidget {
           return Text(
             '还没有阅读记录。点上面的「开始计时阅读」，系统会据此学习你的阅读速度。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           );
         }
         final shown = sessions.take(5).toList();
@@ -601,9 +644,7 @@ class _RecentHistory extends ConsumerWidget {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => StatsPage(bookId: bookId),
-                  ),
+                  MaterialPageRoute(builder: (_) => StatsPage(bookId: bookId)),
                 ),
                 icon: const Icon(Icons.insights_outlined, size: 18),
                 label: Text(
@@ -642,15 +683,17 @@ class _RecentHistory extends ConsumerWidget {
                 Text(
                   '${start.month}/${start.day} $hm',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 13),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
                 Text(
                   '${formatDuration(s.durationSeconds)}'
                   '${pages != null ? ' · $pages 页' : ''}'
                   '${pace != null ? ' · ${pace.toStringAsFixed(0)} 页/小时' : ''}',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                      ),
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -677,8 +720,10 @@ class _ReadingRounds extends ConsumerWidget {
     final totals = <int, (int, int)>{};
     for (final s in sessions) {
       final cur = totals[s.round] ?? (0, 0);
-      totals[s.round] =
-          (cur.$1 + s.durationSeconds, cur.$2 + (s.pagesRead ?? 0));
+      totals[s.round] = (
+        cur.$1 + s.durationSeconds,
+        cur.$2 + (s.pagesRead ?? 0),
+      );
     }
 
     return readingsAsync.when(
@@ -709,9 +754,7 @@ class _ReadingRounds extends ConsumerWidget {
     final scheme = theme.colorScheme;
     final isCurrent = r.round == book.round;
     final active = isCurrent && r.finishedAt == null;
-    final status = active
-        ? '（进行中）'
-        : (r.completed ? '（已完成）' : '（未读完）');
+    final status = active ? '（进行中）' : (r.completed ? '（已完成）' : '（未读完）');
     final range = r.finishedAt == null
         ? '${formatDate(r.startedAt)} 起'
         : '${formatDate(r.startedAt)} ~ ${formatDate(r.finishedAt!)}';
@@ -740,12 +783,15 @@ class _ReadingRounds extends ConsumerWidget {
                 Text(
                   '第 ${r.round} 遍$status',
                   style: const TextStyle(
-                      fontWeight: FontWeight.w600, fontSize: 13),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
                 ),
                 Text(
                   '$range$totals',
-                  style: theme.textTheme.bodySmall
-                      ?.copyWith(color: scheme.onSurfaceVariant),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -764,9 +810,11 @@ class _ReadingRounds extends ConsumerWidget {
       context: context,
       builder: (context) => AlertDialog(
         title: Text('开始重读《${book.title}》？'),
-        content: Text(finished
-            ? '会开始新的一遍，进度重置为第 1 页；之前的阅读记录会保留。'
-            : '这一遍还没读完。开始重读会把这一遍记为「未读完」，进度重置为第 1 页；之前的记录会保留。'),
+        content: Text(
+          finished
+              ? '会开始新的一遍，进度重置为第 1 页；之前的阅读记录会保留。'
+              : '这一遍还没读完。开始重读会把这一遍记为「未读完」，进度重置为第 1 页；之前的记录会保留。',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
