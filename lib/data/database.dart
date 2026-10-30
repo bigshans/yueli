@@ -6,67 +6,80 @@ import 'tables.dart';
 part 'database.g.dart';
 
 @DriftDatabase(
-    tables: [Books, Plans, Tasks, ReadingSessions, Readings, RestDays, AppSettings])
+  tables: [
+    Books,
+    Plans,
+    Tasks,
+    ReadingSessions,
+    Readings,
+    RestDays,
+    AppSettings,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
 
   static QueryExecutor _open() => driftDatabase(name: 'reader_management');
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) => m.createAll(),
-        onUpgrade: (m, from, to) async {
-          // 迁移必须幂等：历史版本可能出现过「列已添加但版本号未更新」的
-          // 半迁移状态，重复执行 ALTER 会报 duplicate column。这里不再依赖
-          // from 的分支，而是逐项检查后再执行，能自动修复半迁移数据库。
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      // 迁移必须幂等：历史版本可能出现过「列已添加但版本号未更新」的
+      // 半迁移状态，重复执行 ALTER 会报 duplicate column。这里不再依赖
+      // from 的分支，而是逐项检查后再执行，能自动修复半迁移数据库。
 
-          // 1) 确保所有表存在（CREATE TABLE IF NOT EXISTS，幂等）。
-          await m.createAll();
+      // 1) 确保所有表存在（CREATE TABLE IF NOT EXISTS，幂等）。
+      await m.createAll();
 
-          // 2) 补齐可能缺失的列（列已存在则跳过）。
-          await _addColumnIfMissing(m, books, books.manualPagesPerHour);
-          await _addColumnIfMissing(m, books, books.measuredPagesPerHour);
-          await _addColumnIfMissing(m, books, books.round);
-          await _addColumnIfMissing(m, books, books.tags);
-          await _addColumnIfMissing(m, books, books.shelved);
+      // 2) 补齐可能缺失的列（列已存在则跳过）。
+      await _addColumnIfMissing(m, books, books.manualPagesPerHour);
+      await _addColumnIfMissing(m, books, books.measuredPagesPerHour);
+      await _addColumnIfMissing(m, books, books.round);
+      await _addColumnIfMissing(m, books, books.tags);
+      await _addColumnIfMissing(m, books, books.status);
 
-          // plans.deadline 早期为 NOT NULL，需要重建表改为可空。
-          if (await _hasTable('plans') &&
-              await _columnNotNull('plans', 'deadline')) {
-            await m.alterTable(TableMigration(plans));
-          }
-          await _addColumnIfMissing(m, plans, plans.dailyPages);
+      // plans.deadline 早期为 NOT NULL，需要重建表改为可空。
+      if (await _hasTable('plans') &&
+          await _columnNotNull('plans', 'deadline')) {
+        await m.alterTable(TableMigration(plans));
+      }
+      await _addColumnIfMissing(m, plans, plans.dailyPages);
 
-          await _addColumnIfMissing(m, tasks, tasks.reachedPage);
+      await _addColumnIfMissing(m, tasks, tasks.reachedPage);
 
-          await _addColumnIfMissing(m, appSettings, appSettings.activeBookId);
-          await _addColumnIfMissing(m, appSettings, appSettings.activeTaskId);
-          await _addColumnIfMissing(m, appSettings, appSettings.activeStartedAt);
-          await _addColumnIfMissing(
-              m, appSettings, appSettings.activeRunningSince);
-          await _addColumnIfMissing(
-              m, appSettings, appSettings.activeAccumulatedSeconds);
-          await _addColumnIfMissing(m, appSettings, appSettings.autoOpenApp);
-          await _addColumnIfMissing(
-              m, appSettings, appSettings.autoOpenPackage);
-          await _addColumnIfMissing(m, appSettings, appSettings.autoOpenAppName);
-
-          await _addColumnIfMissing(
-              m, readingSessions, readingSessions.round);
-          await _addColumnIfMissing(m, readings, readings.completed);
-
-          // 3) 数据回填（幂等）。
-          await _backfillReadings();
-          await (update(readings)..where((t) => t.finishedAt.isNotNull()))
-              .write(const ReadingsCompanion(completed: Value(true)));
-        },
-        beforeOpen: (details) async {
-          await customStatement('PRAGMA foreign_keys = ON');
-        },
+      await _addColumnIfMissing(m, appSettings, appSettings.settlementMinutes);
+      await _addColumnIfMissing(m, appSettings, appSettings.activeBookId);
+      await _addColumnIfMissing(m, appSettings, appSettings.activeTaskId);
+      await _addColumnIfMissing(m, appSettings, appSettings.activeStartedAt);
+      await _addColumnIfMissing(m, appSettings, appSettings.activeRunningSince);
+      await _addColumnIfMissing(
+        m,
+        appSettings,
+        appSettings.activeAccumulatedSeconds,
       );
+      await _addColumnIfMissing(m, appSettings, appSettings.autoOpenApp);
+      await _addColumnIfMissing(m, appSettings, appSettings.autoOpenPackage);
+      await _addColumnIfMissing(m, appSettings, appSettings.autoOpenAppName);
+
+      await _addColumnIfMissing(m, readingSessions, readingSessions.round);
+      await _addColumnIfMissing(m, readings, readings.completed);
+
+      // 3) 数据回填（幂等）。
+      if (from < 12) await _backfillBookStatus();
+      await _backfillReadings();
+      await (update(readings)..where((t) => t.finishedAt.isNotNull())).write(
+        const ReadingsCompanion(completed: Value(true)),
+      );
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+      await _selfHealColumns();
+    },
+  );
 
   Future<bool> _hasTable(String table) async {
     final rows = await customSelect(
@@ -100,28 +113,75 @@ class AppDatabase extends _$AppDatabase {
     await m.addColumn(table, column);
   }
 
+  /// 修复「版本号已经更新、但列没加上」的半迁移数据库。
+  ///
+  /// 开发过程中出现过 schemaVersion 已到 12、books.status 却不存在的情况；
+  /// 此时 onUpgrade 不会再执行，只能在打开数据库前按列检查补齐。
+  Future<void> _selfHealColumns() async {
+    if (await _hasTable('books')) {
+      if (!await _hasColumn('books', 'status')) {
+        await customStatement(
+          "ALTER TABLE books ADD COLUMN status TEXT NOT NULL DEFAULT 'reading'",
+        );
+        await _backfillBookStatus();
+      }
+    }
+    if (await _hasTable('app_settings') &&
+        !await _hasColumn('app_settings', 'settlement_minutes')) {
+      await customStatement(
+        'ALTER TABLE app_settings ADD COLUMN settlement_minutes INTEGER NOT NULL DEFAULT 0',
+      );
+    }
+  }
+
+  /// 从旧版 shelved 布尔列迁移阅读状态。
+  Future<void> _backfillBookStatus() async {
+    if (await _hasColumn('books', 'shelved')) {
+      await customStatement('''
+        UPDATE books
+        SET status = CASE
+          WHEN total_pages > 0 AND current_page >= total_pages THEN 'finished'
+          WHEN shelved = 1 THEN 'shelved'
+          ELSE 'reading'
+        END
+        WHERE status = 'reading'
+      ''');
+    } else {
+      await customStatement('''
+        UPDATE books
+        SET status = 'finished'
+        WHERE status = 'reading'
+          AND total_pages > 0
+          AND current_page >= total_pages
+      ''');
+    }
+  }
+
   /// 为每本书补建缺失的「当前轮次」记录。
   Future<void> _backfillReadings() async {
     final allBooks = await select(books).get();
     for (final b in allBooks) {
-      final existing = await (select(readings)
-            ..where((t) => t.bookId.equals(b.id) & t.round.equals(b.round)))
-          .getSingleOrNull();
+      final existing =
+          await (select(readings)
+                ..where((t) => t.bookId.equals(b.id) & t.round.equals(b.round)))
+              .getSingleOrNull();
       if (existing == null) {
-        await into(readings).insert(ReadingsCompanion.insert(
-          bookId: b.id,
-          round: b.round,
-          startedAt: b.createdAt,
-        ));
+        await into(readings).insert(
+          ReadingsCompanion.insert(
+            bookId: b.id,
+            round: b.round,
+            startedAt: b.createdAt,
+          ),
+        );
       }
     }
   }
 
   /// 确保存在唯一的设置行。
   Future<AppSetting> loadSettings() async {
-    final existing = await (select(appSettings)
-          ..where((t) => t.id.equals(1)))
-        .getSingleOrNull();
+    final existing = await (select(
+      appSettings,
+    )..where((t) => t.id.equals(1))).getSingleOrNull();
     if (existing != null) return existing;
     await into(appSettings).insert(const AppSettingsCompanion());
     return (select(appSettings)..where((t) => t.id.equals(1))).getSingle();

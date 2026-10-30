@@ -227,6 +227,16 @@ void main() {
     expect(result.pagesPerReadingDay, 25);
   });
 
+  test('结算时间：4:00 前仍属于前一天', () {
+    final before = DateTime(2025, 1, 7, 3, 59);
+    final at = DateTime(2025, 1, 7, 4, 0);
+    expect(logicalDate(before, 4 * 60), DateTime(2025, 1, 6));
+    expect(logicalDate(at, 4 * 60), DateTime(2025, 1, 7));
+    // 默认 0:00 结算即自然日。
+    expect(logicalDate(before), DateTime(2025, 1, 7));
+    expect(formatSettlementTime(4 * 60), '04:00');
+  });
+
   test('dateRange 跨月末不丢天', () {
     final days = dateRange(
       DateTime(2025, 1, 30),

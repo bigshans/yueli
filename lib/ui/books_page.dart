@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/book_status.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
@@ -14,12 +15,40 @@ class BooksPage extends ConsumerStatefulWidget {
   ConsumerState<BooksPage> createState() => _BooksPageState();
 }
 
-class _BooksPageState extends ConsumerState<BooksPage> {
+class _BooksPageState extends ConsumerState<BooksPage>
+    with SingleTickerProviderStateMixin {
   final _search = TextEditingController();
   String _query = '';
+  late final TabController _tabs;
+
+  static const _statuses = <String?>[
+    null,
+    BookStatus.reading,
+    BookStatus.want,
+    BookStatus.finished,
+    BookStatus.shelved,
+  ];
+  static const _tabLabels = ['全部', '在读', '想读', '已读', '搁置'];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabs = TabController(
+      length: _statuses.length,
+      vsync: this,
+      initialIndex: 1,
+    )..addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (mounted) setState(() {});
+  }
 
   @override
   void dispose() {
+    _tabs
+      ..removeListener(_onTabChanged)
+      ..dispose();
     _search.dispose();
     super.dispose();
   }
@@ -40,7 +69,15 @@ class _BooksPageState extends ConsumerState<BooksPage> {
     final scheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('书架')),
+      appBar: AppBar(
+        title: const Text('书架'),
+        bottom: TabBar(
+          controller: _tabs,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: [for (final label in _tabLabels) Tab(text: label)],
+        ),
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => Navigator.of(
           context,
@@ -105,11 +142,17 @@ class _BooksPageState extends ConsumerState<BooksPage> {
                     ),
                   );
                 }
-                final filtered = _filter(books);
+                final tabStatus = _statuses[_tabs.index];
+                final filtered = _filter(books)
+                    .where((b) => tabStatus == null || b.status == tabStatus)
+                    .toList();
                 if (filtered.isEmpty) {
+                  final label = _tabLabels[_tabs.index];
                   return Center(
                     child: Text(
-                      '没有找到匹配「$_query」的书',
+                      _query.isEmpty
+                          ? '「$label」里还没有书'
+                          : '「$label」里没有找到匹配「$_query」的书',
                       style: TextStyle(color: scheme.onSurfaceVariant),
                     ),
                   );
@@ -167,33 +210,33 @@ class _BookTile extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 32,
-                      minHeight: 32,
-                    ),
-                    tooltip: book.shelved ? '恢复阅读' : '搁置',
-                    icon: Icon(
-                      book.shelved
-                          ? Icons.play_circle_outline
-                          : Icons.pause_circle_outline,
-                      size: 20,
-                    ),
-                    onPressed: () async {
-                      final next = !book.shelved;
+                  PopupMenuButton<String>(
+                    tooltip: '修改阅读状态',
+                    initialValue: book.status,
+                    onSelected: (next) async {
                       await ref
                           .read(repositoryProvider)
-                          .setBookShelved(book.id, next);
+                          .setBookStatus(book.id, next);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
-                            content: Text(next ? '已搁置，恢复后会从当前进度继续排期' : '已恢复阅读'),
+                            content: Text('已标记为「${BookStatus.label(next)}」'),
                           ),
                         );
                       }
                     },
+                    itemBuilder: (context) => [
+                      for (final status in BookStatus.all)
+                        CheckedPopupMenuItem(
+                          value: status,
+                          checked: book.status == status,
+                          child: Text(BookStatus.label(status)),
+                        ),
+                    ],
+                    child: const Padding(
+                      padding: EdgeInsets.all(6),
+                      child: Icon(Icons.more_vert, size: 20),
+                    ),
                   ),
                   _PriorityBadge(
                     label: _priorityLabel,
@@ -255,31 +298,31 @@ class _BookTile extends ConsumerWidget {
                   ),
                   const Spacer(),
                   planAsync.maybeWhen(
-                    data: (plan) => book.shelved
-                        ? Text(
-                            '已搁置',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.tertiary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          )
-                        : plan == null
-                        ? Text(
-                            '未排期',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.outline,
-                            ),
-                          )
-                        : Text(
-                            plan.deadline == null
-                                ? '无期限'
-                                : '截止 ${plan.deadline!.month}/${plan.deadline!.day}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: plan.status == 'oversubscribed'
-                                  ? theme.colorScheme.error
-                                  : theme.colorScheme.onSurfaceVariant,
-                            ),
+                    data: (plan) {
+                      if (book.status != BookStatus.reading) {
+                        return Text(
+                          BookStatus.label(book.status),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.tertiary,
+                            fontWeight: FontWeight.w600,
                           ),
+                        );
+                      }
+                      return Text(
+                        plan == null
+                            ? '未排期'
+                            : plan.deadline == null
+                            ? '无期限'
+                            : '截止 ${plan.deadline!.month}/${plan.deadline!.day}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: plan?.status == 'oversubscribed'
+                              ? theme.colorScheme.error
+                              : plan == null
+                              ? theme.colorScheme.outline
+                              : theme.colorScheme.onSurfaceVariant,
+                        ),
+                      );
+                    },
                     orElse: () => const SizedBox.shrink(),
                   ),
                 ],

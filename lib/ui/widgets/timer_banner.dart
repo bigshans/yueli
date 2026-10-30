@@ -25,17 +25,17 @@ Future<void> startTimerFor(
   int? taskId,
 }) async {
   if (ref.read(activeTimerProvider) != null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('已有正在进行的计时，请先结束')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已有正在进行的计时，请先结束')));
     return;
   }
   await ref.read(repositoryProvider).startTimer(bookId: bookId, taskId: taskId);
   await _maybeOpenTargetApp(ref);
   if (!context.mounted) return;
-  await Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => const FocusTimerPage()),
-  );
+  await Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => const FocusTimerPage()));
 }
 
 /// 安卓端：按设置自动打开指定应用。
@@ -56,9 +56,9 @@ Future<void> startFreeTimer(BuildContext context, WidgetRef ref) async {
   await ref.read(repositoryProvider).startTimer();
   await _maybeOpenTargetApp(ref);
   if (!context.mounted) return;
-  await Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => const FocusTimerPage()),
-  );
+  await Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => const FocusTimerPage()));
 }
 
 /// 为当前计时选择书本。返回选中的书（取消则 null）。
@@ -67,9 +67,9 @@ Future<Book?> pickBookForTimer(BuildContext context, WidgetRef ref) async {
   final books = await repo.allBooks();
   if (!context.mounted) return null;
   if (books.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('还没有读物，请先在书架添加')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('还没有读物，请先在书架添加')));
     return null;
   }
   final selected = await showModalBottomSheet<Book>(
@@ -101,16 +101,13 @@ Future<Book?> pickBookForTimer(BuildContext context, WidgetRef ref) async {
 
 /// 打开专注计时页。
 Future<void> openFocusTimer(BuildContext context) {
-  return Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => const FocusTimerPage()),
-  );
+  return Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => const FocusTimerPage()));
 }
 
 /// 结束计时对话框：确认用时、页数与是否完成任务。
-Future<void> showStopTimerDialog(
-  BuildContext context,
-  WidgetRef ref,
-) async {
+Future<void> showStopTimerDialog(BuildContext context, WidgetRef ref) async {
   final initial = ref.read(activeTimerProvider);
   if (initial == null) return;
   final repo = ref.read(repositoryProvider);
@@ -134,8 +131,9 @@ Future<void> showStopTimerDialog(
     bookId = selected.id;
   }
 
-  final boundTask =
-      initial.taskId == null ? null : await repo.getTask(initial.taskId!);
+  final boundTask = initial.taskId == null
+      ? null
+      : await repo.getTask(initial.taskId!);
   // 自由计时时，归到今天这本书的任务，这样时长也能计进去。
   final task = boundTask ?? await repo.taskForBookOnDate(bookId, now);
   final attributed = boundTask == null && task != null;
@@ -148,6 +146,8 @@ Future<void> showStopTimerDialog(
   final pageController = TextEditingController(
     text: (task?.endPage ?? book?.currentPage)?.toString() ?? '',
   );
+  final minutesController = TextEditingController(text: '${elapsed ~/ 60}');
+  final secondsController = TextEditingController(text: '${elapsed % 60}');
   var completeTask = boundTask != null;
 
   final result = await showDialog<String>(
@@ -163,9 +163,45 @@ Future<void> showStopTimerDialog(
               children: [
                 const Icon(Icons.timer_outlined),
                 const SizedBox(width: 8),
-                Text('本次用时 ${formatDuration(elapsed)}',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text('本次用时', style: Theme.of(context).textTheme.titleMedium),
               ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: minutesController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '分钟',
+                      suffixText: '分',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextField(
+                    controller: secondsController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '秒',
+                      suffixText: '秒',
+                      isDense: true,
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '短时段可以手动修改用时；自动记录为 ${formatDuration(elapsed)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             if (attributed)
               Padding(
@@ -173,8 +209,8 @@ Future<void> showStopTimerDialog(
                 child: Text(
                   '会计入今天《${book?.title ?? ''}》的阅读任务',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ),
             const SizedBox(height: 16),
@@ -210,6 +246,13 @@ Future<void> showStopTimerDialog(
     ),
   );
 
+  final parsedMinutes = int.tryParse(minutesController.text.trim());
+  final parsedSeconds = int.tryParse(secondsController.text.trim());
+  var manualSeconds = (parsedMinutes ?? 0) * 60 + (parsedSeconds ?? 0);
+  if (manualSeconds <= 0) manualSeconds = 1;
+  minutesController.dispose();
+  secondsController.dispose();
+
   if (result == 'abandon') {
     await repo.cancelTimer();
     return;
@@ -224,15 +267,16 @@ Future<void> showStopTimerDialog(
     reachedPage: reached,
     completeTask: completeTask,
     fallbackBookId: bookId,
+    durationSeconds: manualSeconds,
   );
 }
 
 InputDecoration _pageField(Book? book) => InputDecoration(
-      labelText: '读到第几页',
-      hintText: book != null ? '共 ${book.totalPages} 页' : null,
-      suffixText: '页',
-      border: const OutlineInputBorder(),
-    );
+  labelText: '读到第几页',
+  hintText: book != null ? '共 ${book.totalPages} 页' : null,
+  suffixText: '页',
+  border: const OutlineInputBorder(),
+);
 
 /// 底部常驻计时条，只在计时中存在，每秒刷新已用时长（暂停时不刷新）。
 class TimerBanner extends ConsumerStatefulWidget {
@@ -266,12 +310,16 @@ class _TimerBannerState extends ConsumerState<TimerBanner> {
   Widget build(BuildContext context) {
     final timer = ref.watch(activeTimerProvider);
     _syncTicker(timer?.isRunning ?? false);
-    ref.listen(activeTimerProvider, (_, next) => _syncTicker(next?.isRunning ?? false));
+    ref.listen(
+      activeTimerProvider,
+      (_, next) => _syncTicker(next?.isRunning ?? false),
+    );
     if (timer == null) return const SizedBox.shrink();
 
     final scheme = Theme.of(context).colorScheme;
-    final book =
-        timer.bookId == null ? null : ref.watch(bookProvider(timer.bookId!)).valueOrNull;
+    final book = timer.bookId == null
+        ? null
+        : ref.watch(bookProvider(timer.bookId!)).valueOrNull;
     final elapsed = timer.elapsedSecondsAt(DateTime.now());
 
     return Material(
@@ -289,8 +337,7 @@ class _TimerBannerState extends ConsumerState<TimerBanner> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      book?.title ??
-                          (timer.bookId == null ? '未选择书本' : '阅读中'),
+                      book?.title ?? (timer.bookId == null ? '未选择书本' : '阅读中'),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(

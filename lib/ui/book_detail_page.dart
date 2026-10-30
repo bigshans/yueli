@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/date_x.dart';
+import '../data/book_status.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
 import '../domain/scheduling/scheduler.dart';
@@ -34,7 +35,7 @@ class BookDetailPage extends ConsumerWidget {
         final settings = ref.watch(settingsProvider).valueOrNull;
         final activeTimer = ref.watch(activeTimerProvider);
         final timingThis = activeTimer != null && activeTimer.bookId == bookId;
-        final rangeStart = today();
+        final rangeStart = ref.watch(logicalTodayProvider);
         final rangeEnd = addDays(rangeStart, 120);
         final tasksAsync = ref.watch(
           tasksInRangeProvider((rangeStart, rangeEnd)),
@@ -47,14 +48,19 @@ class BookDetailPage extends ConsumerWidget {
           appBar: AppBar(
             title: const Text('读物详情'),
             actions: [
-              IconButton(
-                tooltip: book.shelved ? '恢复阅读' : '搁置',
-                icon: Icon(
-                  book.shelved
-                      ? Icons.play_circle_outline
-                      : Icons.pause_circle_outline,
-                ),
-                onPressed: () => _toggleShelved(context, ref, book),
+              PopupMenuButton<String>(
+                tooltip: '阅读状态',
+                initialValue: book.status,
+                icon: const Icon(Icons.bookmark_outline),
+                onSelected: (status) => _setStatus(context, ref, book, status),
+                itemBuilder: (context) => [
+                  for (final status in BookStatus.all)
+                    CheckedPopupMenuItem(
+                      value: status,
+                      checked: book.status == status,
+                      child: Text(BookStatus.label(status)),
+                    ),
+                ],
               ),
               IconButton(
                 tooltip: '编辑',
@@ -125,16 +131,16 @@ class BookDetailPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _toggleShelved(
+  Future<void> _setStatus(
     BuildContext context,
     WidgetRef ref,
     Book book,
+    String status,
   ) async {
-    final next = !book.shelved;
-    await ref.read(repositoryProvider).setBookShelved(book.id, next);
+    await ref.read(repositoryProvider).setBookStatus(book.id, status);
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(next ? '已搁置，恢复后会从当前进度继续排期' : '已恢复阅读')),
+        SnackBar(content: Text('已标记为「${BookStatus.label(status)}」')),
       );
     }
   }
@@ -226,7 +232,7 @@ class _Header extends StatelessWidget {
             ],
           ),
         ],
-        if (book.shelved) ...[
+        if (book.status != BookStatus.reading) ...[
           const SizedBox(height: 10),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -235,7 +241,7 @@ class _Header extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
-              '已搁置，不再安排每日任务',
+              BookStatus.label(book.status),
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
@@ -333,8 +339,8 @@ class _PlanSummary extends ConsumerWidget {
     final restDates =
         ref.watch(restDatesProvider(plan.id)).valueOrNull ?? const <DateTime>{};
     final oversub = plan.status == 'oversubscribed';
-    final statusText = book.shelved
-        ? '已搁置'
+    final statusText = book.status != BookStatus.reading
+        ? BookStatus.label(book.status)
         : switch (plan.status) {
             'completed' => '已完成',
             'oversubscribed' => '排不下：期限内读不完',
@@ -464,7 +470,8 @@ class _RestDaysDialog extends ConsumerWidget {
     final restDates =
         ref.watch(restDatesProvider(plan.id)).valueOrNull ?? const <DateTime>{};
     final sorted = restDates.toList()..sort();
-    final lastDate = plan.deadline ?? DateTime(today().year + 3);
+    final today0 = ref.watch(logicalTodayProvider);
+    final lastDate = plan.deadline ?? DateTime(today0.year + 3);
 
     return AlertDialog(
       title: const Text('休息日'),
@@ -510,9 +517,9 @@ class _RestDaysDialog extends ConsumerWidget {
           onPressed: () async {
             final picked = await showDatePicker(
               context: context,
-              initialDate: today(),
-              firstDate: today(),
-              lastDate: lastDate.isBefore(today()) ? today() : lastDate,
+              initialDate: today0,
+              firstDate: today0,
+              lastDate: lastDate.isBefore(today0) ? today0 : lastDate,
             );
             if (picked != null) {
               await ref.read(repositoryProvider).addRestDay(plan.id, picked);
@@ -548,7 +555,7 @@ class _Stats extends ConsumerWidget {
     final daily = ref.watch(dailyStatsProvider(book.id)).valueOrNull;
     DailyStat? todayStat;
     if (daily != null) {
-      final t = today();
+      final t = ref.watch(logicalTodayProvider);
       for (final d in daily) {
         if (d.date == t) {
           todayStat = d;

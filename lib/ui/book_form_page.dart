@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/book_status.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
@@ -25,6 +26,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
   late final TextEditingController _pace;
   late final TextEditingController _tags;
   int _priority = 2;
+  String _status = BookStatus.reading;
 
   bool get _isEdit => widget.book != null;
 
@@ -41,6 +43,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     );
     _tags = TextEditingController(text: b?.tags ?? '');
     _priority = b?.priority ?? 2;
+    _status = b?.status ?? BookStatus.reading;
   }
 
   @override
@@ -64,6 +67,9 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     final pace = int.tryParse(_pace.text.trim());
     final tagsText = encodeTags(parseTags(_tags.text));
     final tags = tagsText.isEmpty ? null : tagsText;
+    final effectiveCurrent = _status == BookStatus.finished
+        ? total
+        : current.clamp(0, total);
 
     if (_isEdit) {
       await repo.updateBook(
@@ -72,25 +78,28 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
           title: Value(title),
           author: Value(author.isEmpty ? null : author),
           totalPages: Value(total),
-          currentPage: Value(current.clamp(0, total)),
+          currentPage: Value(effectiveCurrent),
           priority: Value(_priority),
           manualPagesPerHour: Value(pace),
           tags: Value(tags),
+          status: Value(_status),
         ),
       );
       final plan = await repo.getPlanForBook(widget.book!.id);
       if (plan != null) await repo.reschedulePlan(plan.id);
-      if (mounted) Navigator.of(context).pop();      return;
+      if (mounted) Navigator.of(context).pop();
+      return;
     }
 
     final id = await repo.createBook(
       title: title,
       author: author.isEmpty ? null : author,
       totalPages: total,
-      currentPage: current.clamp(0, total),
+      currentPage: effectiveCurrent,
       priority: _priority,
       manualPagesPerHour: pace,
       tags: tags,
+      status: _status,
     );
     if (!mounted) return;
     Navigator.of(context).pushReplacement(
@@ -103,12 +112,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? '编辑读物' : '添加读物'),
-        actions: [
-          TextButton(
-            onPressed: _save,
-            child: const Text('保存'),
-          ),
-        ],
+        actions: [TextButton(onPressed: _save, child: const Text('保存'))],
       ),
       bottomNavigationBar: const TimerBanner(),
       body: Form(
@@ -190,6 +194,21 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
                 suffixText: '页/小时',
                 border: OutlineInputBorder(),
               ),
+            ),
+            const SizedBox(height: 20),
+            Text('阅读状态', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final status in BookStatus.all)
+                  ChoiceChip(
+                    label: Text(BookStatus.label(status)),
+                    selected: _status == status,
+                    onSelected: (_) => setState(() => _status = status),
+                  ),
+              ],
             ),
             const SizedBox(height: 20),
             Text('优先级', style: Theme.of(context).textTheme.labelLarge),

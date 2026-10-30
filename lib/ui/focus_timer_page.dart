@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../core/date_x.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'widgets/timer_banner.dart';
@@ -94,14 +93,20 @@ class _TimerBody extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bookId = timer.bookId;
-    final book =
-        bookId == null ? null : ref.watch(bookProvider(bookId)).valueOrNull;
-    final plan =
-        bookId == null ? null : ref.watch(planForBookProvider(bookId)).valueOrNull;
+    final book = bookId == null
+        ? null
+        : ref.watch(bookProvider(bookId)).valueOrNull;
+    final plan = bookId == null
+        ? null
+        : ref.watch(planForBookProvider(bookId)).valueOrNull;
     final settings = ref.watch(settingsProvider).valueOrNull;
     final todayTask = bookId == null
         ? null
-        : ref.watch(taskOnDateProvider((bookId, today()))).valueOrNull;
+        : ref
+              .watch(
+                taskOnDateProvider((bookId, ref.watch(logicalTodayProvider))),
+              )
+              .valueOrNull;
     final targetPages = todayTask == null
         ? plan?.dailyPages
         : todayTask.endPage - todayTask.startPage + 1;
@@ -112,8 +117,8 @@ class _TimerBody extends ConsumerWidget {
     final targetMinutes = plan == null
         ? 30
         : (plan.dailyPages != null
-            ? (plan.dailyPages! / pace * 60).round()
-            : plan.dailyMinutes);
+              ? (plan.dailyPages! / pace * 60).round()
+              : plan.dailyMinutes);
     final targetSeconds = targetMinutes * 60;
     final elapsed = timer.elapsedSecondsAt(now);
     final progress = (elapsed / targetSeconds).clamp(0.0, 1.0);
@@ -129,10 +134,9 @@ class _TimerBody extends ConsumerWidget {
             textAlign: TextAlign.center,
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context)
-                .textTheme
-                .titleLarge
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
           ),
           if (bookId == null)
             TextButton.icon(
@@ -143,9 +147,9 @@ class _TimerBody extends ConsumerWidget {
           const SizedBox(height: 4),
           Text(
             timer.isRunning ? '计时中' : '已暂停',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: scheme.onSurfaceVariant,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: scheme.onSurfaceVariant),
           ),
           const Spacer(),
           SizedBox(
@@ -181,8 +185,8 @@ class _TimerBody extends ConsumerWidget {
                     Text(
                       '目标 ${formatDuration(targetSeconds)}',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: scheme.onSurfaceVariant,
-                          ),
+                        color: scheme.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -194,12 +198,12 @@ class _TimerBody extends ConsumerWidget {
             overTarget
                 ? '已达成今日目标，真棒！'
                 : (targetPages != null
-                    ? '今日目标 $targetPages 页 · 专注读书，把手机放一边'
-                    : '专注读书中，把手机放到一边'),
+                      ? '今日目标 $targetPages 页 · 专注读书，把手机放一边'
+                      : '专注读书中，把手机放到一边'),
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: overTarget ? scheme.tertiary : scheme.onSurfaceVariant,
-                ),
+              color: overTarget ? scheme.tertiary : scheme.onSurfaceVariant,
+            ),
           ),
           const Spacer(),
           Row(
@@ -208,9 +212,7 @@ class _TimerBody extends ConsumerWidget {
                 child: OutlinedButton.icon(
                   onPressed: () {
                     final repo = ref.read(repositoryProvider);
-                    timer.isRunning
-                        ? repo.pauseTimer()
-                        : repo.resumeTimer();
+                    timer.isRunning ? repo.pauseTimer() : repo.resumeTimer();
                   },
                   icon: Icon(timer.isRunning ? Icons.pause : Icons.play_arrow),
                   label: Text(timer.isRunning ? '暂停' : '继续'),
@@ -232,10 +234,7 @@ class _TimerBody extends ConsumerWidget {
               ),
             ],
           ),
-          TextButton(
-            onPressed: onAbandon,
-            child: const Text('放弃这次计时'),
-          ),
+          TextButton(onPressed: onAbandon, child: const Text('放弃这次计时')),
           const SizedBox(height: 16),
         ],
       ),
@@ -253,8 +252,11 @@ class _Finished extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle_outline,
-              size: 64, color: Theme.of(context).colorScheme.primary),
+          Icon(
+            Icons.check_circle_outline,
+            size: 64,
+            color: Theme.of(context).colorScheme.primary,
+          ),
           const SizedBox(height: 16),
           const Text('计时已结束'),
           const SizedBox(height: 16),

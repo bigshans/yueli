@@ -19,6 +19,23 @@ final settingsProvider = StreamProvider<AppSetting>((ref) {
   return ref.watch(databaseProvider).watchSettings();
 });
 
+/// 定期刷新的当前时刻，让跨过结算时间后「今日」自动切换。
+final clockProvider = StreamProvider<DateTime>((ref) async* {
+  yield DateTime.now();
+  yield* Stream.periodic(const Duration(seconds: 30), (_) => DateTime.now());
+});
+
+/// 用户设置的每日结算时间（0:00 起的分钟数）。
+final settlementMinutesProvider = Provider<int>((ref) {
+  return ref.watch(settingsProvider).valueOrNull?.settlementMinutes ?? 0;
+});
+
+/// 按结算时间计算出的「今天」（零点）。
+final logicalTodayProvider = Provider<DateTime>((ref) {
+  final now = ref.watch(clockProvider).valueOrNull ?? DateTime.now();
+  return logicalDate(now, ref.watch(settlementMinutesProvider));
+});
+
 final booksProvider = StreamProvider<List<Book>>((ref) {
   return ref.watch(repositoryProvider).watchBooks();
 });
@@ -34,15 +51,20 @@ final planForBookProvider = StreamProvider.family<Plan?, int>((ref, bookId) {
 /// 今天的任务。
 final todayTasksProvider = StreamProvider<List<TaskWithBook>>((ref) {
   final repo = ref.watch(repositoryProvider);
-  final t = today();
+  final t = ref.watch(logicalTodayProvider);
   return repo.watchTasksBetween(t, t);
 });
 
 /// [from, to] 闭区间内的任务。
 final tasksInRangeProvider =
-    StreamProvider.family<List<TaskWithBook>, (DateTime, DateTime)>((ref, range) {
-  return ref.watch(repositoryProvider).watchTasksBetween(range.$1, range.$2);
-});
+    StreamProvider.family<List<TaskWithBook>, (DateTime, DateTime)>((
+      ref,
+      range,
+    ) {
+      return ref
+          .watch(repositoryProvider)
+          .watchTasksBetween(range.$1, range.$2);
+    });
 
 /// 当前正在进行的计时（无则为 null）。书本可能尚未选择。
 final activeTimerProvider = Provider<ActiveTimer?>((ref) {
@@ -65,26 +87,39 @@ final bookStatsProvider = StreamProvider.family<BookStats, int>((ref, bookId) {
 });
 
 /// 一本书的计时明细（按时间倒序）。
-final sessionsProvider =
-    StreamProvider.family<List<ReadingSession>, int>((ref, bookId) {
+final sessionsProvider = StreamProvider.family<List<ReadingSession>, int>((
+  ref,
+  bookId,
+) {
   return ref.watch(repositoryProvider).watchSessions(bookId);
 });
 
 /// 一本书按天聚合的阅读统计（倒序）。
-final dailyStatsProvider =
-    StreamProvider.family<List<DailyStat>, int>((ref, bookId) {
-  return ref.watch(repositoryProvider).watchDailyStats(bookId);
+final dailyStatsProvider = StreamProvider.family<List<DailyStat>, int>((
+  ref,
+  bookId,
+) {
+  return ref
+      .watch(repositoryProvider)
+      .watchDailyStats(
+        bookId,
+        settlementMinutes: ref.watch(settlementMinutesProvider),
+      );
 });
 
 /// 某本书某天的任务（用于「今日目标」）。
-final taskOnDateProvider =
-    StreamProvider.family<Task?, (int, DateTime)>((ref, arg) {
+final taskOnDateProvider = StreamProvider.family<Task?, (int, DateTime)>((
+  ref,
+  arg,
+) {
   return ref.watch(repositoryProvider).watchTaskForBookOnDate(arg.$1, arg.$2);
 });
 
 /// 某计划的休息日。
-final restDatesProvider =
-    StreamProvider.family<Set<DateTime>, int>((ref, planId) {
+final restDatesProvider = StreamProvider.family<Set<DateTime>, int>((
+  ref,
+  planId,
+) {
   return ref.watch(repositoryProvider).watchRestDates(planId);
 });
 
@@ -95,10 +130,18 @@ final allSessionsProvider = StreamProvider<List<ReadingSession>>((ref) {
 
 /// [from, to] 日期范围内的计时记录（日历用）。
 final sessionsInRangeProvider =
-    StreamProvider.family<List<ReadingSession>, (DateTime, DateTime)>(
-        (ref, range) {
-  return ref.watch(repositoryProvider).watchSessionsBetween(range.$1, range.$2);
-});
+    StreamProvider.family<List<ReadingSession>, (DateTime, DateTime)>((
+      ref,
+      range,
+    ) {
+      return ref
+          .watch(repositoryProvider)
+          .watchSessionsBetween(
+            range.$1,
+            range.$2,
+            settlementMinutes: ref.watch(settlementMinutesProvider),
+          );
+    });
 
 /// 全部计划（全局统计的预计完成日期用）。
 final allPlansProvider = StreamProvider<List<Plan>>((ref) {
@@ -111,6 +154,9 @@ final allRestDatesProvider = StreamProvider<Map<int, Set<DateTime>>>((ref) {
 });
 
 /// 某本书的各遍阅读记录。
-final readingsProvider = StreamProvider.family<List<Reading>, int>((ref, bookId) {
+final readingsProvider = StreamProvider.family<List<Reading>, int>((
+  ref,
+  bookId,
+) {
   return ref.watch(repositoryProvider).watchReadings(bookId);
 });

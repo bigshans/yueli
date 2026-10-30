@@ -5,6 +5,7 @@ import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reader_management/core/date_x.dart';
 import 'package:reader_management/data/backup.dart';
+import 'package:reader_management/data/book_status.dart';
 import 'package:reader_management/data/database.dart';
 import 'package:reader_management/data/repository.dart';
 
@@ -39,6 +40,7 @@ void main() {
     final plan = await repo.getPlanForBook(id);
     await repo.addRestDay(plan!.id, addDays(today(), 2));
 
+    await repo.updateSettings(settlementMinutes: 4 * 60);
     final t0 = today().add(const Duration(hours: 9));
     await repo.startTimer(bookId: id, now: t0);
     await repo.stopTimer(
@@ -70,6 +72,7 @@ void main() {
     expect(books.single.title, '备份测试书');
     expect(books.single.author, '作者');
     expect(books.single.tags, '小说,测试');
+    expect(books.single.status, BookStatus.reading);
     expect(books.single.manualPagesPerHour, 45);
     expect(books.single.currentPage, 18);
 
@@ -88,6 +91,7 @@ void main() {
 
     final settings = await db.loadSettings();
     expect(settings.pagesPerHour, 30); // 恢复导出时的设置，而不是导出后的 99
+    expect(settings.settlementMinutes, 4 * 60);
     expect(settings.activeStartedAt, isNull); // 计时状态不进入备份
   });
 

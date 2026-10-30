@@ -24,6 +24,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   final _minutes = TextEditingController(text: '30');
   int _dailyMinutes = 30;
   Set<int> _weekdays = {1, 2, 3, 4, 5, 6, 7};
+  int _settlementMinutes = 0;
   bool _seeded = false;
 
   @override
@@ -38,6 +39,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _dailyMinutes = s.defaultDailyMinutes;
         _minutes.text = '$_dailyMinutes';
         _weekdays = parseWeekdays(s.defaultWeekdays);
+        _settlementMinutes = s.settlementMinutes;
       });
     }, fireImmediately: true);
   }
@@ -144,6 +146,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         _dailyMinutes = restored.defaultDailyMinutes;
         _minutes.text = '$_dailyMinutes';
         _weekdays = parseWeekdays(restored.defaultWeekdays);
+        _settlementMinutes = restored.settlementMinutes;
       });
       await showDialog<void>(
         context: context,
@@ -176,6 +179,22 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
+  Future<void> _pickSettlementTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: _settlementMinutes ~/ 60,
+        minute: _settlementMinutes % 60,
+      ),
+      helpText: '选择每日结算时间',
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _settlementMinutes = picked.hour * 60 + picked.minute;
+      });
+    }
+  }
+
   Future<void> _save() async {
     final pace = int.tryParse(_pace.text.trim());
     if (pace == null || pace <= 0) {
@@ -197,6 +216,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           pagesPerHour: pace,
           defaultDailyMinutes: minutes,
           defaultWeekdays: encodeWeekdays(_weekdays),
+          settlementMinutes: _settlementMinutes,
         );
     if (mounted) {
       ScaffoldMessenger.of(
@@ -279,6 +299,29 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                   },
                 ),
             ],
+          ),
+          const SizedBox(height: 24),
+          Text(
+            '每日结算时间',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '每天到这个时间才开始新的一天。例如设为 04:00，'
+            '凌晨 04:00 前的阅读和任务仍算前一天。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.schedule_outlined),
+            title: Text(formatSettlementTime(_settlementMinutes)),
+            subtitle: const Text('点击修改'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: _pickSettlementTime,
           ),
           const SizedBox(height: 24),
           Text(

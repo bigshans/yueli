@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reader_management/core/date_x.dart';
+import 'package:reader_management/data/book_status.dart';
 import 'package:reader_management/data/database.dart';
 import 'package:reader_management/data/repository.dart';
 
@@ -563,13 +564,121 @@ void main() {
     );
     await repo.setBookShelved(id, true);
 
-    expect((await repo.getBook(id))!.shelved, isTrue);
+    expect((await repo.getBook(id))!.status, BookStatus.shelved);
     expect(await repo.activeTimer(), isNull);
     expect(await repo.tasksBetween(today(), addDays(today(), 4)), isEmpty);
 
     await repo.setBookShelved(id, false);
 
-    expect((await repo.getBook(id))!.shelved, isFalse);
+    expect((await repo.getBook(id))!.status, BookStatus.reading);
     expect(await repo.tasksBetween(today(), addDays(today(), 4)), isNotEmpty);
+  });
+
+  test('结算时间影响今日任务归属与计时记录', () async {
+    final id = await repo.createBook(title: '跨夜书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: DateTime(2025, 1, 6),
+      deadline: DateTime(2025, 1, 10),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    await repo.updateSettings(settlementMinutes: 4 * 60);
+    final plan = await repo.getPlanForBook(id);
+    // 以 1 月 6 日晚上为「今天」重新排期。
+    await repo.reschedulePlan(plan!.id, now: DateTime(2025, 1, 6, 20));
+
+    final jan6Task = await repo.taskForBookOnDate(id, DateTime(2025, 1, 6));
+    expect(jan6Task, isNotNull);
+
+    // 次日凌晨 3:30 结束计时，仍应归到 1 月 6 日的任务。
+    await repo.startTimer(bookId: id, now: DateTime(2025, 1, 7, 3));
+    await repo.stopTimer(now: DateTime(2025, 1, 7, 3, 30));
+
+    final sessions = await repo.watchSessions(id).first;
+    expect(sessions.single.taskId, jan6Task!.id);
+
+    final daily = await repo
+        .watchDailyStats(id, settlementMinutes: 4 * 60)
+        .first;
+    expect(daily.single.date, DateTime(2025, 1, 6));
+  });
+
+  test('阅读状态控制排期：想读隐藏任务，已读补满进度', () async {
+    final id = await repo.createBook(title: '状态书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    expect(await repo.tasksBetween(today(), addDays(today(), 4)), isNotEmpty);
+
+    await repo.setBookStatus(id, BookStatus.want);
+    expect((await repo.getBook(id))!.status, BookStatus.want);
+    expect(await repo.tasksBetween(today(), addDays(today(), 4)), isEmpty);
+
+    await repo.setBookStatus(id, BookStatus.finished);
+    final finished = await repo.getBook(id);
+    expect(finished!.status, BookStatus.finished);
+    expect(finished.currentPage, 100);
+    expect(await repo.tasksBetween(today(), addDays(today(), 4)), isEmpty);
+  });
+
+  test('短时段可以手动指定计时时长', () async {
+    final id = await repo.createBook(title: '短读', totalPages: 100);
+    final t0 = today().add(const Duration(hours: 9));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(
+      durationSeconds: 45,
+      now: t0.add(const Duration(minutes: 10)),
+    );
+
+    final session = await (db.select(db.readingSessions)).getSingle();
+    expect(session.durationSeconds, 45);
+    expect(session.endedAt, t0.add(const Duration(seconds: 45)));
+  });
+
+  test('没有计时也能手动补记页数', () async {
+    final id = await repo.createBook(title: '补记书', totalPages: 100);
+    final pages = await repo.logPagesRead(
+      bookId: id,
+      reachedPage: 20,
+      at: today().add(const Duration(hours: 12)),
+    );
+
+    expect(pages, 20);
+    expect((await repo.getBook(id))!.currentPage, 20);
+    final sessions = await (db.select(db.readingSessions)).get();
+    expect(sessions, hasLength(1));
+    expect(sessions.single.durationSeconds, 0);
+    expect(sessions.single.pagesRead, 20);
+
+    final stats = await repo.bookStats(id);
+    expect(stats.totalPages, 20);
+    expect(stats.timedPages, 0);
+    expect(stats.averagePagesPerHour, isNull);
+  });
+
+  test('有计时后再补记页数，不影响按时间计算的阅读速度', () async {
+    final id = await repo.createBook(title: '混合记录', totalPages: 100);
+    final t0 = today().add(const Duration(hours: 9));
+    await repo.startTimer(bookId: id, now: t0);
+    await repo.stopTimer(
+      reachedPage: 10,
+      now: t0.add(const Duration(minutes: 10)),
+    );
+
+    await repo.logPagesRead(
+      bookId: id,
+      reachedPage: 25,
+      at: today().add(const Duration(hours: 12)),
+    );
+
+    final stats = await repo.bookStats(id);
+    expect(stats.totalPages, 25);
+    expect(stats.timedPages, 10);
+    expect(stats.averagePagesPerHour, closeTo(60, 0.001));
   });
 }

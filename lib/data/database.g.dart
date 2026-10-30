@@ -93,20 +93,15 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
-  static const VerificationMeta _shelvedMeta = const VerificationMeta(
-    'shelved',
-  );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
   @override
-  late final GeneratedColumn<bool> shelved = GeneratedColumn<bool>(
-    'shelved',
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
     aliasedName,
     false,
-    type: DriftSqlType.bool,
+    type: DriftSqlType.string,
     requiredDuringInsert: false,
-    defaultConstraints: GeneratedColumn.constraintIsAlways(
-      'CHECK ("shelved" IN (0, 1))',
-    ),
-    defaultValue: const Constant(false),
+    defaultValue: const Constant('reading'),
   );
   static const VerificationMeta _manualPagesPerHourMeta =
       const VerificationMeta('manualPagesPerHour');
@@ -151,7 +146,7 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     priority,
     tags,
     round,
-    shelved,
+    status,
     manualPagesPerHour,
     measuredPagesPerHour,
     createdAt,
@@ -220,10 +215,10 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         round.isAcceptableOrUnknown(data['round']!, _roundMeta),
       );
     }
-    if (data.containsKey('shelved')) {
+    if (data.containsKey('status')) {
       context.handle(
-        _shelvedMeta,
-        shelved.isAcceptableOrUnknown(data['shelved']!, _shelvedMeta),
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
       );
     }
     if (data.containsKey('manual_pages_per_hour')) {
@@ -291,9 +286,9 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.int,
         data['${effectivePrefix}round'],
       )!,
-      shelved: attachedDatabase.typeMapping.read(
-        DriftSqlType.bool,
-        data['${effectivePrefix}shelved'],
+      status: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}status'],
       )!,
       manualPagesPerHour: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
@@ -334,8 +329,9 @@ class Book extends DataClass implements Insertable<Book> {
   /// 当前是第几遍阅读（重读会递增）。
   final int round;
 
-  /// 是否搁置。搁置后不再生成/展示待读任务，恢复时从当前进度继续排期。
-  final bool shelved;
+  /// 阅读状态：want | reading | finished | shelved。
+  /// 只有 reading 的书会进入今日任务和日历排期。
+  final String status;
 
   /// 用户手填的阅读速度（页/小时）。留空则用自动学习值或全局默认。
   final int? manualPagesPerHour;
@@ -352,7 +348,7 @@ class Book extends DataClass implements Insertable<Book> {
     required this.priority,
     this.tags,
     required this.round,
-    required this.shelved,
+    required this.status,
     this.manualPagesPerHour,
     this.measuredPagesPerHour,
     required this.createdAt,
@@ -372,7 +368,7 @@ class Book extends DataClass implements Insertable<Book> {
       map['tags'] = Variable<String>(tags);
     }
     map['round'] = Variable<int>(round);
-    map['shelved'] = Variable<bool>(shelved);
+    map['status'] = Variable<String>(status);
     if (!nullToAbsent || manualPagesPerHour != null) {
       map['manual_pages_per_hour'] = Variable<int>(manualPagesPerHour);
     }
@@ -395,7 +391,7 @@ class Book extends DataClass implements Insertable<Book> {
       priority: Value(priority),
       tags: tags == null && nullToAbsent ? const Value.absent() : Value(tags),
       round: Value(round),
-      shelved: Value(shelved),
+      status: Value(status),
       manualPagesPerHour: manualPagesPerHour == null && nullToAbsent
           ? const Value.absent()
           : Value(manualPagesPerHour),
@@ -420,7 +416,7 @@ class Book extends DataClass implements Insertable<Book> {
       priority: serializer.fromJson<int>(json['priority']),
       tags: serializer.fromJson<String?>(json['tags']),
       round: serializer.fromJson<int>(json['round']),
-      shelved: serializer.fromJson<bool>(json['shelved']),
+      status: serializer.fromJson<String>(json['status']),
       manualPagesPerHour: serializer.fromJson<int?>(json['manualPagesPerHour']),
       measuredPagesPerHour: serializer.fromJson<double?>(
         json['measuredPagesPerHour'],
@@ -440,7 +436,7 @@ class Book extends DataClass implements Insertable<Book> {
       'priority': serializer.toJson<int>(priority),
       'tags': serializer.toJson<String?>(tags),
       'round': serializer.toJson<int>(round),
-      'shelved': serializer.toJson<bool>(shelved),
+      'status': serializer.toJson<String>(status),
       'manualPagesPerHour': serializer.toJson<int?>(manualPagesPerHour),
       'measuredPagesPerHour': serializer.toJson<double?>(measuredPagesPerHour),
       'createdAt': serializer.toJson<DateTime>(createdAt),
@@ -456,7 +452,7 @@ class Book extends DataClass implements Insertable<Book> {
     int? priority,
     Value<String?> tags = const Value.absent(),
     int? round,
-    bool? shelved,
+    String? status,
     Value<int?> manualPagesPerHour = const Value.absent(),
     Value<double?> measuredPagesPerHour = const Value.absent(),
     DateTime? createdAt,
@@ -469,7 +465,7 @@ class Book extends DataClass implements Insertable<Book> {
     priority: priority ?? this.priority,
     tags: tags.present ? tags.value : this.tags,
     round: round ?? this.round,
-    shelved: shelved ?? this.shelved,
+    status: status ?? this.status,
     manualPagesPerHour: manualPagesPerHour.present
         ? manualPagesPerHour.value
         : this.manualPagesPerHour,
@@ -492,7 +488,7 @@ class Book extends DataClass implements Insertable<Book> {
       priority: data.priority.present ? data.priority.value : this.priority,
       tags: data.tags.present ? data.tags.value : this.tags,
       round: data.round.present ? data.round.value : this.round,
-      shelved: data.shelved.present ? data.shelved.value : this.shelved,
+      status: data.status.present ? data.status.value : this.status,
       manualPagesPerHour: data.manualPagesPerHour.present
           ? data.manualPagesPerHour.value
           : this.manualPagesPerHour,
@@ -514,7 +510,7 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('priority: $priority, ')
           ..write('tags: $tags, ')
           ..write('round: $round, ')
-          ..write('shelved: $shelved, ')
+          ..write('status: $status, ')
           ..write('manualPagesPerHour: $manualPagesPerHour, ')
           ..write('measuredPagesPerHour: $measuredPagesPerHour, ')
           ..write('createdAt: $createdAt')
@@ -532,7 +528,7 @@ class Book extends DataClass implements Insertable<Book> {
     priority,
     tags,
     round,
-    shelved,
+    status,
     manualPagesPerHour,
     measuredPagesPerHour,
     createdAt,
@@ -549,7 +545,7 @@ class Book extends DataClass implements Insertable<Book> {
           other.priority == this.priority &&
           other.tags == this.tags &&
           other.round == this.round &&
-          other.shelved == this.shelved &&
+          other.status == this.status &&
           other.manualPagesPerHour == this.manualPagesPerHour &&
           other.measuredPagesPerHour == this.measuredPagesPerHour &&
           other.createdAt == this.createdAt);
@@ -564,7 +560,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<int> priority;
   final Value<String?> tags;
   final Value<int> round;
-  final Value<bool> shelved;
+  final Value<String> status;
   final Value<int?> manualPagesPerHour;
   final Value<double?> measuredPagesPerHour;
   final Value<DateTime> createdAt;
@@ -577,7 +573,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.priority = const Value.absent(),
     this.tags = const Value.absent(),
     this.round = const Value.absent(),
-    this.shelved = const Value.absent(),
+    this.status = const Value.absent(),
     this.manualPagesPerHour = const Value.absent(),
     this.measuredPagesPerHour = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -591,7 +587,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.priority = const Value.absent(),
     this.tags = const Value.absent(),
     this.round = const Value.absent(),
-    this.shelved = const Value.absent(),
+    this.status = const Value.absent(),
     this.manualPagesPerHour = const Value.absent(),
     this.measuredPagesPerHour = const Value.absent(),
     this.createdAt = const Value.absent(),
@@ -606,7 +602,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<int>? priority,
     Expression<String>? tags,
     Expression<int>? round,
-    Expression<bool>? shelved,
+    Expression<String>? status,
     Expression<int>? manualPagesPerHour,
     Expression<double>? measuredPagesPerHour,
     Expression<DateTime>? createdAt,
@@ -620,7 +616,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (priority != null) 'priority': priority,
       if (tags != null) 'tags': tags,
       if (round != null) 'round': round,
-      if (shelved != null) 'shelved': shelved,
+      if (status != null) 'status': status,
       if (manualPagesPerHour != null)
         'manual_pages_per_hour': manualPagesPerHour,
       if (measuredPagesPerHour != null)
@@ -638,7 +634,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<int>? priority,
     Value<String?>? tags,
     Value<int>? round,
-    Value<bool>? shelved,
+    Value<String>? status,
     Value<int?>? manualPagesPerHour,
     Value<double?>? measuredPagesPerHour,
     Value<DateTime>? createdAt,
@@ -652,7 +648,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
       priority: priority ?? this.priority,
       tags: tags ?? this.tags,
       round: round ?? this.round,
-      shelved: shelved ?? this.shelved,
+      status: status ?? this.status,
       manualPagesPerHour: manualPagesPerHour ?? this.manualPagesPerHour,
       measuredPagesPerHour: measuredPagesPerHour ?? this.measuredPagesPerHour,
       createdAt: createdAt ?? this.createdAt,
@@ -686,8 +682,8 @@ class BooksCompanion extends UpdateCompanion<Book> {
     if (round.present) {
       map['round'] = Variable<int>(round.value);
     }
-    if (shelved.present) {
-      map['shelved'] = Variable<bool>(shelved.value);
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
     }
     if (manualPagesPerHour.present) {
       map['manual_pages_per_hour'] = Variable<int>(manualPagesPerHour.value);
@@ -714,7 +710,7 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('priority: $priority, ')
           ..write('tags: $tags, ')
           ..write('round: $round, ')
-          ..write('shelved: $shelved, ')
+          ..write('status: $status, ')
           ..write('manualPagesPerHour: $manualPagesPerHour, ')
           ..write('measuredPagesPerHour: $measuredPagesPerHour, ')
           ..write('createdAt: $createdAt')
@@ -3307,6 +3303,18 @@ class $AppSettingsTable extends AppSettings
     requiredDuringInsert: false,
     defaultValue: const Constant('1,2,3,4,5,6,7'),
   );
+  static const VerificationMeta _settlementMinutesMeta = const VerificationMeta(
+    'settlementMinutes',
+  );
+  @override
+  late final GeneratedColumn<int> settlementMinutes = GeneratedColumn<int>(
+    'settlement_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   static const VerificationMeta _activeBookIdMeta = const VerificationMeta(
     'activeBookId',
   );
@@ -3407,6 +3415,7 @@ class $AppSettingsTable extends AppSettings
     pagesPerHour,
     defaultDailyMinutes,
     defaultWeekdays,
+    settlementMinutes,
     activeBookId,
     activeTaskId,
     activeStartedAt,
@@ -3455,6 +3464,15 @@ class $AppSettingsTable extends AppSettings
         defaultWeekdays.isAcceptableOrUnknown(
           data['default_weekdays']!,
           _defaultWeekdaysMeta,
+        ),
+      );
+    }
+    if (data.containsKey('settlement_minutes')) {
+      context.handle(
+        _settlementMinutesMeta,
+        settlementMinutes.isAcceptableOrUnknown(
+          data['settlement_minutes']!,
+          _settlementMinutesMeta,
         ),
       );
     }
@@ -3555,6 +3573,10 @@ class $AppSettingsTable extends AppSettings
         DriftSqlType.string,
         data['${effectivePrefix}default_weekdays'],
       )!,
+      settlementMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}settlement_minutes'],
+      )!,
       activeBookId: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}active_book_id'],
@@ -3604,6 +3626,10 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
   final int defaultDailyMinutes;
   final String defaultWeekdays;
 
+  /// 每日结算时间，单位为从 0:00 起的分钟数。
+  /// 例如 240 = 凌晨 4:00，此时 4:00 前的阅读仍计入前一天。
+  final int settlementMinutes;
+
   /// 正在进行的计时：书籍 / 任务 / 开始时刻。三者同时为空表示未计时。
   final int? activeBookId;
   final int? activeTaskId;
@@ -3626,6 +3652,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
     required this.pagesPerHour,
     required this.defaultDailyMinutes,
     required this.defaultWeekdays,
+    required this.settlementMinutes,
     this.activeBookId,
     this.activeTaskId,
     this.activeStartedAt,
@@ -3642,6 +3669,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
     map['pages_per_hour'] = Variable<int>(pagesPerHour);
     map['default_daily_minutes'] = Variable<int>(defaultDailyMinutes);
     map['default_weekdays'] = Variable<String>(defaultWeekdays);
+    map['settlement_minutes'] = Variable<int>(settlementMinutes);
     if (!nullToAbsent || activeBookId != null) {
       map['active_book_id'] = Variable<int>(activeBookId);
     }
@@ -3671,6 +3699,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
       pagesPerHour: Value(pagesPerHour),
       defaultDailyMinutes: Value(defaultDailyMinutes),
       defaultWeekdays: Value(defaultWeekdays),
+      settlementMinutes: Value(settlementMinutes),
       activeBookId: activeBookId == null && nullToAbsent
           ? const Value.absent()
           : Value(activeBookId),
@@ -3706,6 +3735,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
         json['defaultDailyMinutes'],
       ),
       defaultWeekdays: serializer.fromJson<String>(json['defaultWeekdays']),
+      settlementMinutes: serializer.fromJson<int>(json['settlementMinutes']),
       activeBookId: serializer.fromJson<int?>(json['activeBookId']),
       activeTaskId: serializer.fromJson<int?>(json['activeTaskId']),
       activeStartedAt: serializer.fromJson<DateTime?>(json['activeStartedAt']),
@@ -3728,6 +3758,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
       'pagesPerHour': serializer.toJson<int>(pagesPerHour),
       'defaultDailyMinutes': serializer.toJson<int>(defaultDailyMinutes),
       'defaultWeekdays': serializer.toJson<String>(defaultWeekdays),
+      'settlementMinutes': serializer.toJson<int>(settlementMinutes),
       'activeBookId': serializer.toJson<int?>(activeBookId),
       'activeTaskId': serializer.toJson<int?>(activeTaskId),
       'activeStartedAt': serializer.toJson<DateTime?>(activeStartedAt),
@@ -3746,6 +3777,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
     int? pagesPerHour,
     int? defaultDailyMinutes,
     String? defaultWeekdays,
+    int? settlementMinutes,
     Value<int?> activeBookId = const Value.absent(),
     Value<int?> activeTaskId = const Value.absent(),
     Value<DateTime?> activeStartedAt = const Value.absent(),
@@ -3759,6 +3791,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
     pagesPerHour: pagesPerHour ?? this.pagesPerHour,
     defaultDailyMinutes: defaultDailyMinutes ?? this.defaultDailyMinutes,
     defaultWeekdays: defaultWeekdays ?? this.defaultWeekdays,
+    settlementMinutes: settlementMinutes ?? this.settlementMinutes,
     activeBookId: activeBookId.present ? activeBookId.value : this.activeBookId,
     activeTaskId: activeTaskId.present ? activeTaskId.value : this.activeTaskId,
     activeStartedAt: activeStartedAt.present
@@ -3789,6 +3822,9 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
       defaultWeekdays: data.defaultWeekdays.present
           ? data.defaultWeekdays.value
           : this.defaultWeekdays,
+      settlementMinutes: data.settlementMinutes.present
+          ? data.settlementMinutes.value
+          : this.settlementMinutes,
       activeBookId: data.activeBookId.present
           ? data.activeBookId.value
           : this.activeBookId,
@@ -3823,6 +3859,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
           ..write('pagesPerHour: $pagesPerHour, ')
           ..write('defaultDailyMinutes: $defaultDailyMinutes, ')
           ..write('defaultWeekdays: $defaultWeekdays, ')
+          ..write('settlementMinutes: $settlementMinutes, ')
           ..write('activeBookId: $activeBookId, ')
           ..write('activeTaskId: $activeTaskId, ')
           ..write('activeStartedAt: $activeStartedAt, ')
@@ -3841,6 +3878,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
     pagesPerHour,
     defaultDailyMinutes,
     defaultWeekdays,
+    settlementMinutes,
     activeBookId,
     activeTaskId,
     activeStartedAt,
@@ -3858,6 +3896,7 @@ class AppSetting extends DataClass implements Insertable<AppSetting> {
           other.pagesPerHour == this.pagesPerHour &&
           other.defaultDailyMinutes == this.defaultDailyMinutes &&
           other.defaultWeekdays == this.defaultWeekdays &&
+          other.settlementMinutes == this.settlementMinutes &&
           other.activeBookId == this.activeBookId &&
           other.activeTaskId == this.activeTaskId &&
           other.activeStartedAt == this.activeStartedAt &&
@@ -3873,6 +3912,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
   final Value<int> pagesPerHour;
   final Value<int> defaultDailyMinutes;
   final Value<String> defaultWeekdays;
+  final Value<int> settlementMinutes;
   final Value<int?> activeBookId;
   final Value<int?> activeTaskId;
   final Value<DateTime?> activeStartedAt;
@@ -3886,6 +3926,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     this.pagesPerHour = const Value.absent(),
     this.defaultDailyMinutes = const Value.absent(),
     this.defaultWeekdays = const Value.absent(),
+    this.settlementMinutes = const Value.absent(),
     this.activeBookId = const Value.absent(),
     this.activeTaskId = const Value.absent(),
     this.activeStartedAt = const Value.absent(),
@@ -3900,6 +3941,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     this.pagesPerHour = const Value.absent(),
     this.defaultDailyMinutes = const Value.absent(),
     this.defaultWeekdays = const Value.absent(),
+    this.settlementMinutes = const Value.absent(),
     this.activeBookId = const Value.absent(),
     this.activeTaskId = const Value.absent(),
     this.activeStartedAt = const Value.absent(),
@@ -3914,6 +3956,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     Expression<int>? pagesPerHour,
     Expression<int>? defaultDailyMinutes,
     Expression<String>? defaultWeekdays,
+    Expression<int>? settlementMinutes,
     Expression<int>? activeBookId,
     Expression<int>? activeTaskId,
     Expression<DateTime>? activeStartedAt,
@@ -3929,6 +3972,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
       if (defaultDailyMinutes != null)
         'default_daily_minutes': defaultDailyMinutes,
       if (defaultWeekdays != null) 'default_weekdays': defaultWeekdays,
+      if (settlementMinutes != null) 'settlement_minutes': settlementMinutes,
       if (activeBookId != null) 'active_book_id': activeBookId,
       if (activeTaskId != null) 'active_task_id': activeTaskId,
       if (activeStartedAt != null) 'active_started_at': activeStartedAt,
@@ -3947,6 +3991,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     Value<int>? pagesPerHour,
     Value<int>? defaultDailyMinutes,
     Value<String>? defaultWeekdays,
+    Value<int>? settlementMinutes,
     Value<int?>? activeBookId,
     Value<int?>? activeTaskId,
     Value<DateTime?>? activeStartedAt,
@@ -3961,6 +4006,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
       pagesPerHour: pagesPerHour ?? this.pagesPerHour,
       defaultDailyMinutes: defaultDailyMinutes ?? this.defaultDailyMinutes,
       defaultWeekdays: defaultWeekdays ?? this.defaultWeekdays,
+      settlementMinutes: settlementMinutes ?? this.settlementMinutes,
       activeBookId: activeBookId ?? this.activeBookId,
       activeTaskId: activeTaskId ?? this.activeTaskId,
       activeStartedAt: activeStartedAt ?? this.activeStartedAt,
@@ -3987,6 +4033,9 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
     }
     if (defaultWeekdays.present) {
       map['default_weekdays'] = Variable<String>(defaultWeekdays.value);
+    }
+    if (settlementMinutes.present) {
+      map['settlement_minutes'] = Variable<int>(settlementMinutes.value);
     }
     if (activeBookId.present) {
       map['active_book_id'] = Variable<int>(activeBookId.value);
@@ -4026,6 +4075,7 @@ class AppSettingsCompanion extends UpdateCompanion<AppSetting> {
           ..write('pagesPerHour: $pagesPerHour, ')
           ..write('defaultDailyMinutes: $defaultDailyMinutes, ')
           ..write('defaultWeekdays: $defaultWeekdays, ')
+          ..write('settlementMinutes: $settlementMinutes, ')
           ..write('activeBookId: $activeBookId, ')
           ..write('activeTaskId: $activeTaskId, ')
           ..write('activeStartedAt: $activeStartedAt, ')
@@ -4121,7 +4171,7 @@ typedef $$BooksTableCreateCompanionBuilder =
       Value<int> priority,
       Value<String?> tags,
       Value<int> round,
-      Value<bool> shelved,
+      Value<String> status,
       Value<int?> manualPagesPerHour,
       Value<double?> measuredPagesPerHour,
       Value<DateTime> createdAt,
@@ -4136,7 +4186,7 @@ typedef $$BooksTableUpdateCompanionBuilder =
       Value<int> priority,
       Value<String?> tags,
       Value<int> round,
-      Value<bool> shelved,
+      Value<String> status,
       Value<int?> manualPagesPerHour,
       Value<double?> measuredPagesPerHour,
       Value<DateTime> createdAt,
@@ -4272,8 +4322,8 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<bool> get shelved => $composableBuilder(
-    column: $table.shelved,
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4442,8 +4492,8 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<bool> get shelved => $composableBuilder(
-    column: $table.shelved,
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -4500,8 +4550,8 @@ class $$BooksTableAnnotationComposer
   GeneratedColumn<int> get round =>
       $composableBuilder(column: $table.round, builder: (column) => column);
 
-  GeneratedColumn<bool> get shelved =>
-      $composableBuilder(column: $table.shelved, builder: (column) => column);
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
 
   GeneratedColumn<int> get manualPagesPerHour => $composableBuilder(
     column: $table.manualPagesPerHour,
@@ -4658,7 +4708,7 @@ class $$BooksTableTableManager
                 Value<int> priority = const Value.absent(),
                 Value<String?> tags = const Value.absent(),
                 Value<int> round = const Value.absent(),
-                Value<bool> shelved = const Value.absent(),
+                Value<String> status = const Value.absent(),
                 Value<int?> manualPagesPerHour = const Value.absent(),
                 Value<double?> measuredPagesPerHour = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -4671,7 +4721,7 @@ class $$BooksTableTableManager
                 priority: priority,
                 tags: tags,
                 round: round,
-                shelved: shelved,
+                status: status,
                 manualPagesPerHour: manualPagesPerHour,
                 measuredPagesPerHour: measuredPagesPerHour,
                 createdAt: createdAt,
@@ -4686,7 +4736,7 @@ class $$BooksTableTableManager
                 Value<int> priority = const Value.absent(),
                 Value<String?> tags = const Value.absent(),
                 Value<int> round = const Value.absent(),
-                Value<bool> shelved = const Value.absent(),
+                Value<String> status = const Value.absent(),
                 Value<int?> manualPagesPerHour = const Value.absent(),
                 Value<double?> measuredPagesPerHour = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
@@ -4699,7 +4749,7 @@ class $$BooksTableTableManager
                 priority: priority,
                 tags: tags,
                 round: round,
-                shelved: shelved,
+                status: status,
                 manualPagesPerHour: manualPagesPerHour,
                 measuredPagesPerHour: measuredPagesPerHour,
                 createdAt: createdAt,
@@ -6948,6 +6998,7 @@ typedef $$AppSettingsTableCreateCompanionBuilder =
       Value<int> pagesPerHour,
       Value<int> defaultDailyMinutes,
       Value<String> defaultWeekdays,
+      Value<int> settlementMinutes,
       Value<int?> activeBookId,
       Value<int?> activeTaskId,
       Value<DateTime?> activeStartedAt,
@@ -6963,6 +7014,7 @@ typedef $$AppSettingsTableUpdateCompanionBuilder =
       Value<int> pagesPerHour,
       Value<int> defaultDailyMinutes,
       Value<String> defaultWeekdays,
+      Value<int> settlementMinutes,
       Value<int?> activeBookId,
       Value<int?> activeTaskId,
       Value<DateTime?> activeStartedAt,
@@ -6999,6 +7051,11 @@ class $$AppSettingsTableFilterComposer
 
   ColumnFilters<String> get defaultWeekdays => $composableBuilder(
     column: $table.defaultWeekdays,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get settlementMinutes => $composableBuilder(
+    column: $table.settlementMinutes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7072,6 +7129,11 @@ class $$AppSettingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get settlementMinutes => $composableBuilder(
+    column: $table.settlementMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get activeBookId => $composableBuilder(
     column: $table.activeBookId,
     builder: (column) => ColumnOrderings(column),
@@ -7137,6 +7199,11 @@ class $$AppSettingsTableAnnotationComposer
 
   GeneratedColumn<String> get defaultWeekdays => $composableBuilder(
     column: $table.defaultWeekdays,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get settlementMinutes => $composableBuilder(
+    column: $table.settlementMinutes,
     builder: (column) => column,
   );
 
@@ -7216,6 +7283,7 @@ class $$AppSettingsTableTableManager
                 Value<int> pagesPerHour = const Value.absent(),
                 Value<int> defaultDailyMinutes = const Value.absent(),
                 Value<String> defaultWeekdays = const Value.absent(),
+                Value<int> settlementMinutes = const Value.absent(),
                 Value<int?> activeBookId = const Value.absent(),
                 Value<int?> activeTaskId = const Value.absent(),
                 Value<DateTime?> activeStartedAt = const Value.absent(),
@@ -7229,6 +7297,7 @@ class $$AppSettingsTableTableManager
                 pagesPerHour: pagesPerHour,
                 defaultDailyMinutes: defaultDailyMinutes,
                 defaultWeekdays: defaultWeekdays,
+                settlementMinutes: settlementMinutes,
                 activeBookId: activeBookId,
                 activeTaskId: activeTaskId,
                 activeStartedAt: activeStartedAt,
@@ -7244,6 +7313,7 @@ class $$AppSettingsTableTableManager
                 Value<int> pagesPerHour = const Value.absent(),
                 Value<int> defaultDailyMinutes = const Value.absent(),
                 Value<String> defaultWeekdays = const Value.absent(),
+                Value<int> settlementMinutes = const Value.absent(),
                 Value<int?> activeBookId = const Value.absent(),
                 Value<int?> activeTaskId = const Value.absent(),
                 Value<DateTime?> activeStartedAt = const Value.absent(),
@@ -7257,6 +7327,7 @@ class $$AppSettingsTableTableManager
                 pagesPerHour: pagesPerHour,
                 defaultDailyMinutes: defaultDailyMinutes,
                 defaultWeekdays: defaultWeekdays,
+                settlementMinutes: settlementMinutes,
                 activeBookId: activeBookId,
                 activeTaskId: activeTaskId,
                 activeStartedAt: activeStartedAt,

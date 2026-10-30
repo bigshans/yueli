@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:reader_management/data/book_status.dart';
 import 'package:reader_management/data/database.dart';
 
 void main() {
@@ -16,9 +17,9 @@ void main() {
 
     // 1) 用当前 schema 建库，得到包含 tags 的 books 表。
     var db = AppDatabase(NativeDatabase(file));
-    final id = await db.into(db.books).insert(
-          BooksCompanion.insert(title: '测试书', totalPages: 100),
-        );
+    final id = await db
+        .into(db.books)
+        .insert(BooksCompanion.insert(title: '测试书', totalPages: 100));
     // 2) 把版本号退回 6，模拟「列已加上但版本没更新」的半迁移状态。
     await db.customStatement('PRAGMA user_version = 6');
     await db.close();
@@ -28,20 +29,50 @@ void main() {
     db = AppDatabase(NativeDatabase(file));
     addTearDown(db.close);
 
-    final book =
-        await (db.select(db.books)..where((t) => t.id.equals(id))).getSingle();
+    final book = await (db.select(
+      db.books,
+    )..where((t) => t.id.equals(id))).getSingle();
     expect(book.title, '测试书');
 
     final version = await db
         .customSelect('PRAGMA user_version')
         .getSingle()
         .then((r) => r.read<int>('user_version'));
-    expect(version, 11);
+    expect(version, 13);
 
     // 回填的轮次记录应存在。
-    final rounds = await (db.select(db.readings)
-          ..where((t) => t.bookId.equals(id)))
-        .get();
+    final rounds = await (db.select(
+      db.readings,
+    )..where((t) => t.bookId.equals(id))).get();
     expect(rounds, isNotEmpty);
+  });
+
+  test('版本号已更新但 books.status 缺失时，打开数据库前自动补齐', () async {
+    final file = File(
+      '${Directory.systemTemp.path}/yueli_migration_status_'
+      '${DateTime.now().microsecondsSinceEpoch}.db',
+    );
+    addTearDown(() {
+      if (file.existsSync()) file.deleteSync();
+    });
+
+    var db = AppDatabase(NativeDatabase(file));
+    final id = await db
+        .into(db.books)
+        .insert(BooksCompanion.insert(title: '旧库', totalPages: 100));
+    // 模拟「schemaVersion 已经是 13，但 status 列还没加上」的状态。
+    await db.customStatement('ALTER TABLE books DROP COLUMN status');
+    await db.customStatement('PRAGMA user_version = 13');
+    await db.close();
+
+    db = AppDatabase(NativeDatabase(file));
+    addTearDown(db.close);
+
+    final book = await (db.select(
+      db.books,
+    )..where((t) => t.id.equals(id))).getSingle();
+    expect(book.status, BookStatus.reading);
+    // 与 books 有关的 join 查询也应恢复正常。
+    await db.select(db.tasks).get();
   });
 }

@@ -42,6 +42,8 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
         ref.watch(allRestDatesProvider).valueOrNull ??
         const <int, Set<DateTime>>{};
     final settings = ref.watch(settingsProvider).valueOrNull;
+    final settlementMinutes = ref.watch(settlementMinutesProvider);
+    final now = ref.watch(logicalTodayProvider);
     final planByBook = {for (final p in plans) p.bookId: p};
 
     return Scaffold(
@@ -51,7 +53,6 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('出错了：$e')),
         data: (all) {
-          final now = today();
           final booksById = {for (final b in books) b.id: b};
           final sessionsByBook = <int, List<ReadingSession>>{};
           for (final s in all) {
@@ -82,6 +83,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
                 restDates: plan == null
                     ? const {}
                     : restDatesByPlan[plan.id] ?? const {},
+                settlementMinutes: settlementMinutes,
                 sessions: sessionsByBook[b.id] ?? const [],
               );
               if (finish != null &&
@@ -93,11 +95,17 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
 
           // 今日（跨所有书）。
           final todaySessions = all
-              .where((s) => dateOnly(s.startedAt) == now)
+              .where((s) => logicalDate(s.startedAt, settlementMinutes) == now)
               .toList();
           final todayStat = _aggregate(now, todaySessions);
 
-          final filtered = _applyRange(all, now, _range, _customRange);
+          final filtered = _applyRange(
+            all,
+            now,
+            _range,
+            _customRange,
+            settlementMinutes,
+          );
 
           final entries = <Object>[
             _SummaryData(
@@ -122,7 +130,12 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
                 entries.add(const _SectionTitleData('历史（按天）'));
                 final byDay = <DateTime, List<ReadingSession>>{};
                 for (final s in filtered) {
-                  byDay.putIfAbsent(dateOnly(s.startedAt), () => []).add(s);
+                  byDay
+                      .putIfAbsent(
+                        logicalDate(s.startedAt, settlementMinutes),
+                        () => [],
+                      )
+                      .add(s);
                 }
                 final days = byDay.keys.toList()
                   ..sort((a, b) => b.compareTo(a));
@@ -175,6 +188,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
                   return _WeekChart(
                     all: all,
                     today: now,
+                    settlementMinutes: settlementMinutes,
                     metric: _metric,
                     summary: _MetricSummaryData(
                       metric: _metric,
@@ -186,6 +200,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
                   return ReadingHeatmapCard(
                     sessions: all,
                     today: now,
+                    settlementMinutes: settlementMinutes,
                     metric: _metric == _Metric.pages
                         ? ReadingHeatmapMetric.pages
                         : ReadingHeatmapMetric.time,
@@ -222,6 +237,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
                           restDates: plan == null
                               ? const {}
                               : restDatesByPlan[plan.id] ?? const {},
+                          settlementMinutes: settlementMinutes,
                           sessions: sessionsByBook[book.id] ?? const [],
                         );
                   return _BookRow(
@@ -263,6 +279,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
     DateTime now,
     _Range range,
     DateTimeRange? customRange,
+    int settlementMinutes,
   ) {
     if (range == _Range.all) return sessions;
     if (range == _Range.custom) {
@@ -270,7 +287,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
       final start = dateOnly(customRange.start);
       final end = dateOnly(customRange.end);
       return sessions.where((s) {
-        final d = dateOnly(s.startedAt);
+        final d = logicalDate(s.startedAt, settlementMinutes);
         return !d.isBefore(start) && !d.isAfter(end);
       }).toList();
     }
@@ -283,7 +300,9 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
     };
     final cutoff = addDays(now, -(n - 1));
     return sessions
-        .where((s) => !dateOnly(s.startedAt).isBefore(cutoff))
+        .where(
+          (s) => !logicalDate(s.startedAt, settlementMinutes).isBefore(cutoff),
+        )
         .toList();
   }
 
@@ -292,7 +311,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
       setState(() => _range = range);
       return;
     }
-    final now = today();
+    final now = ref.read(logicalTodayProvider);
     final initial =
         _customRange ?? DateTimeRange(start: addDays(now, -29), end: now);
     final picked = await showDateRangePicker(
@@ -332,6 +351,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
     required Plan? plan,
     required AppSetting settings,
     required Set<DateTime> restDates,
+    required int settlementMinutes,
     required List<ReadingSession> sessions,
   }) {
     if (book.currentPage >= book.totalPages || book.totalPages <= 0) {
@@ -344,7 +364,9 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
     final activeDays = <DateTime>{};
     for (final s in sessions) {
       totalSeconds += s.durationSeconds;
-      activeDays.add(dateOnly(s.startedAt));
+      if (s.durationSeconds > 0) {
+        activeDays.add(logicalDate(s.startedAt, settlementMinutes));
+      }
       final pages = s.pagesRead;
       if (pages != null && s.durationSeconds > 0) {
         pageSeconds += s.durationSeconds;
@@ -368,7 +390,7 @@ class _GlobalStatsPageState extends ConsumerState<GlobalStatsPage> {
       averageDailyMinutes: averageDailyMinutes,
       weekdays: weekdays,
       restDates: restDates,
-      now: today(),
+      now: ref.read(logicalTodayProvider),
     );
     return forecast.finish;
   }
@@ -678,8 +700,12 @@ class _FilterBar extends StatelessWidget {
 }
 
 class _MetricSummaryCard extends StatelessWidget {
-  const _MetricSummaryCard({required this.data});
+  const _MetricSummaryCard({
+    required this.data,
+    required this.settlementMinutes,
+  });
   final _MetricSummaryData data;
+  final int settlementMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -688,11 +714,13 @@ class _MetricSummaryCard extends StatelessWidget {
     final secondsByDay = <DateTime, int>{};
     final pagesByDay = <DateTime, int>{};
     for (final s in data.sessions) {
-      final d = dateOnly(s.startedAt);
+      final d = logicalDate(s.startedAt, settlementMinutes);
       secondsByDay[d] = (secondsByDay[d] ?? 0) + s.durationSeconds;
       pagesByDay[d] = (pagesByDay[d] ?? 0) + (s.pagesRead ?? 0);
     }
-    final activeDays = secondsByDay.length;
+    final activeDays = data.metric == _Metric.time
+        ? secondsByDay.length
+        : pagesByDay.length;
     final totalSeconds = secondsByDay.values.fold<int>(0, (sum, v) => sum + v);
     final totalPages = pagesByDay.values.fold<int>(0, (sum, v) => sum + v);
 
@@ -738,12 +766,14 @@ class _WeekChart extends StatelessWidget {
   const _WeekChart({
     required this.all,
     required this.today,
+    required this.settlementMinutes,
     required this.metric,
     required this.summary,
     required this.onMetric,
   });
   final List<ReadingSession> all;
   final DateTime today;
+  final int settlementMinutes;
   final _Metric metric;
   final _MetricSummaryData summary;
   final ValueChanged<_Metric> onMetric;
@@ -756,7 +786,7 @@ class _WeekChart extends StatelessWidget {
     final secondsByDay = <DateTime, int>{};
     final pagesByDay = <DateTime, int>{};
     for (final s in all) {
-      final d = dateOnly(s.startedAt);
+      final d = logicalDate(s.startedAt, settlementMinutes);
       secondsByDay[d] = (secondsByDay[d] ?? 0) + s.durationSeconds;
       pagesByDay[d] = (pagesByDay[d] ?? 0) + (s.pagesRead ?? 0);
     }
@@ -855,7 +885,10 @@ class _WeekChart extends StatelessWidget {
             const SizedBox(height: 10),
             Divider(height: 1, color: scheme.outlineVariant),
             const SizedBox(height: 10),
-            _MetricSummaryCard(data: summary),
+            _MetricSummaryCard(
+              data: summary,
+              settlementMinutes: settlementMinutes,
+            ),
           ],
         ),
       ),
@@ -1047,6 +1080,7 @@ class _SessionLine extends StatelessWidget {
     final scheme = theme.colorScheme;
     final s = session;
     final pages = s.pagesRead;
+    final manual = s.durationSeconds == 0;
     final start = s.startedAt;
     final end = s.endedAt;
     String hm(DateTime d) =>
@@ -1078,7 +1112,7 @@ class _SessionLine extends StatelessWidget {
                     const SizedBox(width: 6),
                     Text(
                       '${showDate ? '${start.month}/${start.day} ' : ''}'
-                      '${hm(start)}–${hm(end)}',
+                      '${manual ? '手动补记' : '${hm(start)}–${hm(end)}'}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: scheme.onSurfaceVariant,
                       ),
@@ -1086,8 +1120,8 @@ class _SessionLine extends StatelessWidget {
                   ],
                 ),
                 Text(
-                  '${formatDuration(s.durationSeconds)}'
-                  '${pages != null ? ' · $pages 页' : ''}',
+                  '${manual ? '' : '${formatDuration(s.durationSeconds)} · '}'
+                  '${pages ?? 0} 页',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
                   ),

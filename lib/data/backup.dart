@@ -4,6 +4,7 @@ import 'package:archive/archive.dart';
 import 'package:drift/drift.dart';
 
 import '../core/date_x.dart';
+import 'book_status.dart';
 import 'database.dart';
 
 /// 备份文件格式不合法（不是阅历导出的 JSON、版本不支持、字段缺失等）。
@@ -120,6 +121,7 @@ class BackupService {
           'pagesPerHour': settings.pagesPerHour,
           'defaultDailyMinutes': settings.defaultDailyMinutes,
           'defaultWeekdays': settings.defaultWeekdays,
+          'settlementMinutes': settings.settlementMinutes,
           'autoOpenApp': settings.autoOpenApp,
           'autoOpenPackage': settings.autoOpenPackage,
           'autoOpenAppName': settings.autoOpenAppName,
@@ -261,7 +263,7 @@ class BackupService {
     'priority': b.priority,
     'tags': b.tags,
     'round': b.round,
-    'shelved': b.shelved,
+    'status': b.status,
     'manualPagesPerHour': b.manualPagesPerHour,
     'measuredPagesPerHour': b.measuredPagesPerHour,
     'createdAt': b.createdAt.toIso8601String(),
@@ -333,7 +335,14 @@ class BackupService {
     priority: Value(_asInt(m['priority'], 2)),
     tags: Value(_asNullableString(m['tags'])),
     round: Value(_asInt(m['round'], 1)),
-    shelved: Value(_asBool(m['shelved'])),
+    status: Value(
+      BookStatus.fromLegacy(
+        status: m['status'] is String ? m['status'] as String : null,
+        shelved: _asBool(m['shelved']),
+        currentPage: _asInt(m['currentPage'], 0),
+        totalPages: _asInt(m['totalPages'], 0),
+      ),
+    ),
     manualPagesPerHour: Value(_asNullableInt(m['manualPagesPerHour'])),
     measuredPagesPerHour: Value(_asNullableDouble(m['measuredPagesPerHour'])),
     createdAt: Value(_asDate(m['createdAt'])),
@@ -408,6 +417,11 @@ class BackupService {
       ),
       defaultWeekdays: Value(
         _asString(m['defaultWeekdays'], current.defaultWeekdays),
+      ),
+      settlementMinutes: Value(
+        clampSettlementMinutes(
+          _asInt(m['settlementMinutes'], current.settlementMinutes),
+        ),
       ),
       autoOpenApp: Value(_asBool(m['autoOpenApp'])),
       autoOpenPackage: Value(_asNullableString(m['autoOpenPackage'])),

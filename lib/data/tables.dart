@@ -19,8 +19,9 @@ class Books extends Table {
   /// 当前是第几遍阅读（重读会递增）。
   IntColumn get round => integer().withDefault(const Constant(1))();
 
-  /// 是否搁置。搁置后不再生成/展示待读任务，恢复时从当前进度继续排期。
-  BoolColumn get shelved => boolean().withDefault(const Constant(false))();
+  /// 阅读状态：want | reading | finished | shelved。
+  /// 只有 reading 的书会进入今日任务和日历排期。
+  TextColumn get status => text().withDefault(const Constant('reading'))();
 
   /// 用户手填的阅读速度（页/小时）。留空则用自动学习值或全局默认。
   IntColumn get manualPagesPerHour => integer().nullable()();
@@ -28,8 +29,7 @@ class Books extends Table {
   /// 从计时记录自动学习的阅读速度（页/小时）。
   RealColumn get measuredPagesPerHour => real().nullable()();
 
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// 阅读排期计划：把一本书在时间上摊开。
@@ -53,8 +53,7 @@ class Plans extends Table {
 
   /// active | oversubscribed | completed | archived
   TextColumn get status => text().withDefault(const Constant('active'))();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// 每日阅读任务，排期的最小单元。
@@ -77,8 +76,7 @@ class Tasks extends Table {
 
   /// pending | done | skipped
   TextColumn get status => text().withDefault(const Constant('pending'))();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// 一次计时阅读记录，用于统计与学习个人阅读速度。
@@ -96,8 +94,7 @@ class ReadingSessions extends Table {
 
   /// 属于第几遍阅读。
   IntColumn get round => integer().withDefault(const Constant(1))();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// 一本书的每一遍阅读记录。
@@ -111,8 +108,7 @@ class Readings extends Table {
 
   /// 这一遍是否读完了（中途开始重读则为 false）。
   BoolColumn get completed => boolean().withDefault(const Constant(false))();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// 指定某计划中某天休息（不安排阅读）。
@@ -121,8 +117,7 @@ class RestDays extends Table {
   IntColumn get planId =>
       integer().references(Plans, #id, onDelete: KeyAction.cascade)();
   DateTimeColumn get date => dateTime()();
-  DateTimeColumn get createdAt =>
-      dateTime().withDefault(currentDateAndTime)();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
 /// 全局偏好，单行（id 恒为 1）。也保存当前正在进行的计时。
@@ -135,6 +130,10 @@ class AppSettings extends Table {
       integer().withDefault(const Constant(30))();
   TextColumn get defaultWeekdays =>
       text().withDefault(const Constant('1,2,3,4,5,6,7'))();
+
+  /// 每日结算时间，单位为从 0:00 起的分钟数。
+  /// 例如 240 = 凌晨 4:00，此时 4:00 前的阅读仍计入前一天。
+  IntColumn get settlementMinutes => integer().withDefault(const Constant(0))();
 
   /// 正在进行的计时：书籍 / 任务 / 开始时刻。三者同时为空表示未计时。
   IntColumn get activeBookId => integer().nullable()();

@@ -40,8 +40,7 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
     _byPages = p?.dailyPages != null;
     _dailyMinutes = p?.dailyMinutes ?? 30;
     _dailyPages = p?.dailyPages ?? 20;
-    _weekdays =
-        p != null ? parseWeekdays(p.weekdays) : {1, 2, 3, 4, 5, 6, 7};
+    _weekdays = p != null ? parseWeekdays(p.weekdays) : {1, 2, 3, 4, 5, 6, 7};
     _minutesCtrl = TextEditingController(text: _dailyMinutes.toString());
     _pagesCtrl = TextEditingController(text: _dailyPages.toString());
 
@@ -53,7 +52,10 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
         _seeded = true;
         setState(() {
           _dailyMinutes = s.defaultDailyMinutes;
-          _dailyPages = max(1, (s.pagesPerHour * s.defaultDailyMinutes / 60).floor());
+          _dailyPages = max(
+            1,
+            (s.pagesPerHour * s.defaultDailyMinutes / 60).floor(),
+          );
           _weekdays = parseWeekdays(s.defaultWeekdays);
           _minutesCtrl.text = '$_dailyMinutes';
           _pagesCtrl.text = '$_dailyPages';
@@ -73,6 +75,7 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
   Widget build(BuildContext context) {
     final bookAsync = ref.watch(bookProvider(widget.bookId));
     final settings = ref.watch(settingsProvider).valueOrNull;
+    final today0 = ref.watch(logicalTodayProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.plan == null ? '创建排期' : '调整排期')),
@@ -84,19 +87,19 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
           if (book == null || settings == null) {
             return const Center(child: CircularProgressIndicator());
           }
-          return _body(book, settings);
+          return _body(book, settings, today0);
         },
       ),
     );
   }
 
-  Widget _body(Book book, AppSetting settings) {
+  Widget _body(Book book, AppSetting settings, DateTime today0) {
     final pace = effectivePace(book, settings);
     final result = buildSchedule(
       ScheduleInput(
         currentPage: book.currentPage,
         totalPages: book.totalPages,
-        startDate: today(),
+        startDate: today0,
         deadline: _noDeadline ? null : _deadline,
         dailyMinutes: _dailyMinutes,
         dailyPages: _byPages ? _dailyPages : null,
@@ -110,18 +113,17 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
       children: [
         Text(
           book.title,
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.w700),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 4),
         Text(
           '剩余 ${book.totalPages - book.currentPage} 页 · '
           '阅读速度 $pace 页/小时（${_paceSource(book)}）',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 20),
         _label('排期方式'),
@@ -157,8 +159,8 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
           Text(
             '约 ${formatMinutes((_dailyPages / pace * 60).ceil())} / 天（按时长估算，仅供参考）',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ] else ...[
           _label('每天可投入时间'),
@@ -179,9 +181,7 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
             value: _noDeadline,
             onChanged: (v) => setState(() => _noDeadline = v),
             title: const Text('不设截止日期'),
-            subtitle: Text(_byPages
-                ? '按每天的页数一直排，直到读完'
-                : '按每天可投入的时间一直排，直到读完'),
+            subtitle: Text(_byPages ? '按每天的页数一直排，直到读完' : '按每天可投入的时间一直排，直到读完'),
           ),
         ),
         if (!_noDeadline) ...[
@@ -223,19 +223,19 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
   }
 
   Widget _label(String text) => Text(
-        text,
-        style: Theme.of(context)
-            .textTheme
-            .labelLarge
-            ?.copyWith(fontWeight: FontWeight.w600),
-      );
+    text,
+    style: Theme.of(
+      context,
+    ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+  );
 
   Future<void> _pickDeadline() async {
+    final today0 = ref.read(logicalTodayProvider);
     final picked = await showDatePicker(
       context: context,
-      initialDate: _deadline.isBefore(today()) ? today() : _deadline,
-      firstDate: today(),
-      lastDate: DateTime(today().year + 3),
+      initialDate: _deadline.isBefore(today0) ? today0 : _deadline,
+      firstDate: today0,
+      lastDate: DateTime(today0.year + 3),
     );
     if (picked != null) setState(() => _deadline = dateOnly(picked));
   }
@@ -244,22 +244,22 @@ class _PlanEditorPageState extends ConsumerState<PlanEditorPage> {
     final minutes = int.tryParse(_minutesCtrl.text.trim());
     final pages = int.tryParse(_pagesCtrl.text.trim());
     if (_byPages && (pages == null || pages <= 0)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效的每天页数')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入有效的每天页数')));
       return;
     }
     if (!_byPages && (minutes == null || minutes <= 0)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('请输入有效的每天时长')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请输入有效的每天时长')));
       return;
     }
 
     final repo = ref.read(repositoryProvider);
     final result = await repo.savePlan(
       bookId: widget.bookId,
-      startDate: today(),
+      startDate: ref.read(logicalTodayProvider),
       deadline: _noDeadline ? null : _deadline,
       dailyMinutes: minutes ?? _dailyMinutes,
       dailyPages: _byPages ? pages : null,
@@ -343,8 +343,9 @@ class _PreviewCard extends StatelessWidget {
               children: [
                 Icon(
                   ok ? Icons.check_circle_outline : Icons.error_outline,
-                  color:
-                      ok ? theme.colorScheme.primary : theme.colorScheme.error,
+                  color: ok
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.error,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -363,15 +364,19 @@ class _PreviewCard extends StatelessWidget {
               _stat(context, '剩余页数', '${result.remainingPages} 页'),
               _stat(context, '每天读', '${result.pagesPerReadingDay} 页'),
               if (result.estimatedFinish != null)
-                _stat(context, '预计读完',
-                    '${formatDate(result.estimatedFinish!)}（${result.totalReadingDaysNeeded} 个阅读日）'),
+                _stat(
+                  context,
+                  '预计读完',
+                  '${formatDate(result.estimatedFinish!)}（${result.totalReadingDaysNeeded} 个阅读日）',
+                ),
               if (!ok && result.unassignedPages > 0)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
                     '还差约 ${result.unassignedPages} 页。建议延长截止日、提高每天页数，或调高阅读速度。',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: theme.colorScheme.error),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                    ),
                   ),
                 ),
             ],
@@ -392,14 +397,15 @@ class _PreviewCard extends StatelessWidget {
             child: Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
           Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13, fontWeight: FontWeight.w600)),
+            child: Text(
+              value,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ),

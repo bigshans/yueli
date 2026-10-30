@@ -15,12 +15,14 @@ class ReadingHeatmap extends StatelessWidget {
     required this.metric,
     this.weeks = 26,
     this.today,
+    this.settlementMinutes = 0,
   });
 
   final List<ReadingSession> sessions;
   final ReadingHeatmapMetric metric;
   final int weeks;
   final DateTime? today;
+  final int settlementMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -32,7 +34,7 @@ class ReadingHeatmap extends StatelessWidget {
 
     final dayStats = <DateTime, _DayValue>{};
     for (final s in sessions) {
-      final d = dateOnly(s.startedAt);
+      final d = logicalDate(s.startedAt, settlementMinutes);
       if (d.isBefore(start) || d.isAfter(now)) continue;
       final value = dayStats.putIfAbsent(d, _DayValue.new);
       value.seconds += s.durationSeconds;
@@ -246,12 +248,14 @@ class ReadingHeatmapCard extends StatelessWidget {
     required this.metric,
     this.weeks = 26,
     this.today,
+    this.settlementMinutes = 0,
   });
 
   final List<ReadingSession> sessions;
   final ReadingHeatmapMetric metric;
   final int weeks;
   final DateTime? today;
+  final int settlementMinutes;
 
   @override
   Widget build(BuildContext context) {
@@ -288,6 +292,7 @@ class ReadingHeatmapCard extends StatelessWidget {
               metric: metric,
               weeks: weeks,
               today: today,
+              settlementMinutes: settlementMinutes,
             ),
           ],
         ),

@@ -43,6 +43,8 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
     final sessionsAsync = ref.watch(sessionsInRangeProvider((first, last)));
     final books = ref.watch(booksProvider).valueOrNull ?? const <Book>[];
     final booksById = {for (final b in books) b.id: b};
+    final settlementMinutes = ref.watch(settlementMinutesProvider);
+    final logicalToday = ref.watch(logicalTodayProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('日历')),
@@ -65,8 +67,12 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                 }
                 final sessionsByDay = <String, List<ReadingSession>>{};
                 for (final s in sessions) {
+                  final logicalDay = logicalDate(
+                    s.startedAt,
+                    settlementMinutes,
+                  );
                   sessionsByDay
-                      .putIfAbsent(formatDate(s.startedAt), () => [])
+                      .putIfAbsent(formatDate(logicalDay), () => [])
                       .add(s);
                 }
                 return _MonthGrid(
@@ -74,6 +80,7 @@ class _CalendarPageState extends ConsumerState<CalendarPage> {
                   tasksByDay: tasksByDay,
                   sessionsByDay: sessionsByDay,
                   booksById: booksById,
+                  logicalToday: logicalToday,
                   onTapDay: (day) => _showDay(
                     day,
                     tasksByDay[formatDate(day)] ?? const [],
@@ -239,6 +246,7 @@ class _SessionTile extends StatelessWidget {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final pages = session.pagesRead;
+    final manual = session.durationSeconds == 0;
     String hm(DateTime d) =>
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
@@ -258,15 +266,17 @@ class _SessionTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${hm(session.startedAt)}–${hm(session.endedAt)}',
+                  manual
+                      ? '手动补记'
+                      : '${hm(session.startedAt)}–${hm(session.endedAt)}',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 1),
                 Text(
-                  '${formatDuration(session.durationSeconds)}'
-                  '${pages != null ? ' · $pages 页' : ''}'
+                  '${manual ? '' : '${formatDuration(session.durationSeconds)} · '}'
+                  '${pages ?? 0} 页'
                   '${session.round > 1 ? ' · 第 ${session.round} 遍' : ''}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: scheme.onSurfaceVariant,
@@ -343,6 +353,7 @@ class _MonthGrid extends StatelessWidget {
     required this.tasksByDay,
     required this.sessionsByDay,
     required this.booksById,
+    required this.logicalToday,
     required this.onTapDay,
   });
 
@@ -350,6 +361,7 @@ class _MonthGrid extends StatelessWidget {
   final Map<String, List<TaskWithBook>> tasksByDay;
   final Map<String, List<ReadingSession>> sessionsByDay;
   final Map<int, Book> booksById;
+  final DateTime logicalToday;
   final void Function(DateTime) onTapDay;
 
   @override
@@ -357,7 +369,7 @@ class _MonthGrid extends StatelessWidget {
     final first = DateTime(month.year, month.month, 1);
     final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
     final leading = first.weekday - 1; // 周一为首列
-    final today0 = today();
+    final today0 = dateOnly(logicalToday);
 
     final cells = <Widget>[];
     for (var i = 0; i < leading; i++) {

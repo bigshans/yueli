@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:reader_management/app.dart';
 import 'package:reader_management/core/date_x.dart';
+import 'package:reader_management/data/book_status.dart';
 import 'package:reader_management/data/database.dart';
 import 'package:reader_management/data/repository.dart';
 import 'package:reader_management/state/providers.dart';
@@ -113,7 +114,7 @@ void main() {
     );
     await settle(tester);
 
-    await tester.drag(find.byType(GridView), const Offset(0, -220));
+    await tester.drag(find.byType(GridView), const Offset(0, -600));
     await settle(tester);
     expect(find.text('示例书'), findsWidgets);
     await unmount(tester);
@@ -150,6 +151,46 @@ void main() {
       width,
       tester.view.physicalSize.width / tester.view.devicePixelRatio,
     );
+
+    await unmount(tester);
+  });
+
+  testWidgets('书架按阅读状态 Tab 筛选', (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repo = ReadingRepository(db);
+    await repo.createBook(title: '在读的书', totalPages: 100);
+    await repo.createBook(
+      title: '想读的书',
+      totalPages: 100,
+      status: BookStatus.want,
+    );
+    await repo.createBook(
+      title: '已读的书',
+      totalPages: 100,
+      status: BookStatus.finished,
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [databaseProvider.overrideWithValue(db)],
+        child: const MaterialApp(home: BooksPage()),
+      ),
+    );
+    await settle(tester);
+
+    expect(find.text('在读的书'), findsOneWidget);
+    expect(find.text('想读的书'), findsNothing);
+
+    await tester.tap(find.widgetWithText(Tab, '想读'));
+    await settle(tester);
+    expect(find.text('想读的书'), findsOneWidget);
+    expect(find.text('在读的书'), findsNothing);
+
+    await tester.tap(find.widgetWithText(Tab, '已读'));
+    await settle(tester);
+    expect(find.text('已读的书'), findsOneWidget);
+    expect(find.text('想读的书'), findsNothing);
 
     await unmount(tester);
   });
