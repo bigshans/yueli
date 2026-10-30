@@ -1,16 +1,47 @@
-# reader_management
+# 阅历
 
-A new Flutter project.
+一个把读书计划、计时和阅读统计放在一起的本地阅读管理工具。
 
-## Getting Started
+[English](README_EN.md)
 
-This project is a starting point for a Flutter application.
+阅历想解决的问题很具体：手上同时有几本书，各自有期限，或者只想按自己的节奏读；读的时候想顺手计个时，读完又想知道时间花在了哪里、按现在的速度还要多久能读完。
 
-A few resources to get you started if this is your first Flutter project:
+它不要求注册账号，也不依赖云端。所有数据保存在本机。
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## 功能
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **书架**：按想读、在读、已读、搁置分类；支持标签多选筛选和书名/作者搜索。读满总页数会自动标记为已读。
+- **阅读排期**：可以按每天可投入的分钟数排，也可以按每天读多少页排。支持截止日期或不设期限、指定阅读日、添加休息日。进度变化后，后续任务会重新分配。
+- **今日任务**：完成、跳过或修改实际读到的页码。已完成的记录会留在日历和统计里。
+- **计时**：支持暂停和继续；可以先开始计时，之后再选择书本。结束时可以修改实际用时，也可以只补记页数、不记录时间。
+- **手动补记**：没有计时也能补记某天读到的页数，会写入阅读历史，但不会影响按时间计算的阅读速度。
+- **统计**：单本书和全部书籍都有统计，可在「时间」和「页数」两个维度间切换，支持近 7/30/90 天和自定义日期范围，还提供阅读热力图和按当前速度推算的完成日期。
+- **日历**：同时显示排期任务和实际阅读记录，没排期但有阅读记录的日子也能看到。
+- **重读**：一本书可以有多轮阅读记录，每一轮单独计算进度。
+- **备份**：一次导出一个 ZIP，内含可重新导入的完整备份和方便用 Excel 查看的阅读历史 CSV。
+- **结算时间**：可以把凌晨 4 点这类时间设为一天的开始，熬夜读书不会轻易算到第二天。
+
+## 安装
+
+从 [Releases](https://github.com/bigshans/yueli/releases) 下载最新的 Android APK，覆盖安装即可。数据库会在启动时自动迁移。
+
+这个项目主要面向 Android，仓库里也保留了 Flutter 的 Windows、macOS、Linux 和 Web 工程目录。
+
+## 数据
+
+- 数据保存在本机 SQLite 数据库，不需要账号，也不会上传到服务器。
+- 换设备或重装前，建议先在「设置 → 数据备份」里导出备份。
+- 导入会覆盖当前数据，导入前请确认。
+
+## 开发
+
+使用 Flutter 编写，主要依赖 Drift（SQLite）和 Riverpod。
+
+```bash
+flutter pub get
+flutter run
+flutter test
+flutter build apk --release
+```
+
+如果遇到问题，可以在 [Issues](https://github.com/bigshans/yueli/issues) 里反馈。
