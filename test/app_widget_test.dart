@@ -271,7 +271,7 @@ void main() {
     await unmount(tester);
   });
 
-  testWidgets('书架支持按书名 / 作者 / 标签搜索', (tester) async {
+  testWidgets('书架支持按书名 / 作者搜索与标签多选过滤', (tester) async {
     final db = AppDatabase(NativeDatabase.memory());
     addTearDown(db.close);
     final repo = ReadingRepository(db);
@@ -300,18 +300,33 @@ void main() {
 
     final search = find.byType(TextField).first;
 
-    await tester.enterText(search, '小说');
+    await tester.enterText(search, '李四');
     await settle(tester);
     expect(find.text('另一本'), findsOneWidget);
     expect(find.text('深入浅出'), findsNothing);
 
-    await tester.enterText(search, '张三');
+    await tester.enterText(search, '');
     await settle(tester);
-    expect(find.text('深入浅出'), findsOneWidget);
-    expect(find.text('另一本'), findsNothing);
 
-    await tester.enterText(search, '深入');
+    await tester.tap(find.text('标签筛选'));
     await settle(tester);
+    await tester.tap(find.widgetWithText(FilterChip, '#小说'));
+    await tester.tap(find.text('完成'));
+    await settle(tester);
+    expect(find.text('另一本'), findsOneWidget);
+    expect(find.text('深入浅出'), findsNothing);
+
+    await tester.tap(find.textContaining('标签筛选').first);
+    await settle(tester);
+    await tester.tap(find.widgetWithText(FilterChip, '#技术'));
+    await tester.tap(find.text('完成'));
+    await settle(tester);
+    expect(find.text('另一本'), findsOneWidget);
+    expect(find.text('深入浅出'), findsOneWidget);
+
+    await tester.tap(find.text('清除'));
+    await settle(tester);
+    expect(find.text('另一本'), findsOneWidget);
     expect(find.text('深入浅出'), findsOneWidget);
 
     await unmount(tester);

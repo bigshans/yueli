@@ -7,6 +7,7 @@ import '../data/database.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'book_detail_page.dart';
+import 'widgets/tag_picker_sheet.dart';
 import 'widgets/timer_banner.dart';
 
 class BookFormPage extends ConsumerStatefulWidget {
@@ -24,7 +25,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
   late final TextEditingController _total;
   late final TextEditingController _current;
   late final TextEditingController _pace;
-  late final TextEditingController _tags;
+  final _selectedTags = <String>{};
   int _priority = 2;
   String _status = BookStatus.reading;
 
@@ -41,7 +42,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     _pace = TextEditingController(
       text: b?.manualPagesPerHour?.toString() ?? '',
     );
-    _tags = TextEditingController(text: b?.tags ?? '');
+    _selectedTags.addAll(parseTags(b?.tags));
     _priority = b?.priority ?? 2;
     _status = b?.status ?? BookStatus.reading;
   }
@@ -53,7 +54,6 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     _total.dispose();
     _current.dispose();
     _pace.dispose();
-    _tags.dispose();
     super.dispose();
   }
 
@@ -65,7 +65,7 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     final total = int.parse(_total.text.trim());
     final current = int.tryParse(_current.text.trim()) ?? 0;
     final pace = int.tryParse(_pace.text.trim());
-    final tagsText = encodeTags(parseTags(_tags.text));
+    final tagsText = encodeTags(_selectedTags);
     final tags = tagsText.isEmpty ? null : tagsText;
     final effectiveCurrent = _status == BookStatus.finished
         ? total
@@ -107,8 +107,31 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
     );
   }
 
+  Future<void> _pickTags(List<String> allTags) async {
+    final picked = await showTagPickerSheet(
+      context,
+      allTags: allTags,
+      selected: _selectedTags,
+      title: '选择标签',
+      allowCreate: true,
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _selectedTags
+          ..clear()
+          ..addAll(picked);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final allTags = <String>{
+      for (final b in ref.watch(booksProvider).valueOrNull ?? const <Book>[])
+        ...parseTags(b.tags),
+      ..._selectedTags,
+    }.toList()..sort();
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? '编辑读物' : '添加读物'),
@@ -140,15 +163,33 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
               ),
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _tags,
-              textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
-                labelText: '标签（可选，用逗号分隔）',
-                hintText: '如：技术, 心理学',
-                prefixIcon: Icon(Icons.local_offer_outlined),
-                border: OutlineInputBorder(),
+            Text('标签', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 8),
+            if (_selectedTags.isEmpty)
+              Text(
+                '未选择标签',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              )
+            else
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: [
+                  for (final tag in _selectedTags)
+                    InputChip(
+                      label: Text('#$tag'),
+                      onDeleted: () =>
+                          setState(() => _selectedTags.remove(tag)),
+                    ),
+                ],
               ),
+            const SizedBox(height: 6),
+            OutlinedButton.icon(
+              onPressed: () => _pickTags(allTags),
+              icon: const Icon(Icons.local_offer_outlined, size: 18),
+              label: const Text('选择标签'),
             ),
             const SizedBox(height: 16),
             Row(
@@ -209,6 +250,13 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
                     onSelected: (_) => setState(() => _status = status),
                   ),
               ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '读满总页数后会自动标记为「已读」；如果调低进度或撤销任务，会自动回到「在读」。',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 20),
             Text('优先级', style: Theme.of(context).textTheme.labelLarge),

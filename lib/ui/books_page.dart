@@ -7,6 +7,7 @@ import '../data/repository.dart';
 import '../state/providers.dart';
 import 'book_detail_page.dart';
 import 'book_form_page.dart';
+import 'widgets/tag_picker_sheet.dart';
 
 class BooksPage extends ConsumerStatefulWidget {
   const BooksPage({super.key});
@@ -19,6 +20,7 @@ class _BooksPageState extends ConsumerState<BooksPage>
     with SingleTickerProviderStateMixin {
   final _search = TextEditingController();
   String _query = '';
+  final _selectedTags = <String>{};
   late final TabController _tabs;
 
   static const _statuses = <String?>[
@@ -53,13 +55,33 @@ class _BooksPageState extends ConsumerState<BooksPage>
     super.dispose();
   }
 
+  Future<void> _pickTags(List<String> allTags) async {
+    final picked = await showTagPickerSheet(
+      context,
+      allTags: allTags,
+      selected: _selectedTags,
+      title: '筛选标签',
+    );
+    if (picked != null && mounted) {
+      setState(() {
+        _selectedTags
+          ..clear()
+          ..addAll(picked);
+      });
+    }
+  }
+
   List<Book> _filter(List<Book> books) {
     final q = _query.trim().toLowerCase();
-    if (q.isEmpty) return books;
     return books.where((b) {
-      if (b.title.toLowerCase().contains(q)) return true;
-      if ((b.author ?? '').toLowerCase().contains(q)) return true;
-      return parseTags(b.tags).any((t) => t.toLowerCase().contains(q));
+      if (q.isNotEmpty &&
+          !b.title.toLowerCase().contains(q) &&
+          !(b.author ?? '').toLowerCase().contains(q)) {
+        return false;
+      }
+      if (_selectedTags.isEmpty) return true;
+      final tags = parseTags(b.tags).toSet();
+      return _selectedTags.any(tags.contains);
     }).toList();
   }
 
@@ -67,6 +89,10 @@ class _BooksPageState extends ConsumerState<BooksPage>
   Widget build(BuildContext context) {
     final booksAsync = ref.watch(booksProvider);
     final scheme = Theme.of(context).colorScheme;
+    final allBooks = booksAsync.valueOrNull ?? const <Book>[];
+    final availableTags = <String>{
+      for (final b in allBooks) ...parseTags(b.tags),
+    }.toList()..sort();
 
     return Scaffold(
       appBar: AppBar(
@@ -92,7 +118,7 @@ class _BooksPageState extends ConsumerState<BooksPage>
             child: TextField(
               controller: _search,
               decoration: InputDecoration(
-                hintText: '搜索书名 / 作者 / 标签',
+                hintText: '搜索书名 / 作者',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _query.isEmpty
                     ? null
@@ -111,6 +137,37 @@ class _BooksPageState extends ConsumerState<BooksPage>
               onChanged: (v) => setState(() => _query = v),
             ),
           ),
+          if (availableTags.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: () => _pickTags(availableTags),
+                    icon: const Icon(Icons.local_offer_outlined, size: 18),
+                    label: Text(
+                      _selectedTags.isEmpty
+                          ? '标签筛选'
+                          : '标签筛选 · ${_selectedTags.length}',
+                    ),
+                  ),
+                  for (final tag in _selectedTags)
+                    InputChip(
+                      label: Text('#$tag'),
+                      onDeleted: () =>
+                          setState(() => _selectedTags.remove(tag)),
+                    ),
+                  if (_selectedTags.isNotEmpty)
+                    TextButton(
+                      onPressed: () => setState(_selectedTags.clear),
+                      child: const Text('清除'),
+                    ),
+                ],
+              ),
+            ),
           Expanded(
             child: booksAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),

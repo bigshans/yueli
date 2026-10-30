@@ -26,8 +26,11 @@ abstract final class BookStatus {
     int currentPage = 0,
     int totalPages = 0,
   }) {
-    if (status != null && all.contains(status)) return status;
+    // 「已读」由进度自动判定，优先于任何手动状态。
     if (totalPages > 0 && currentPage >= totalPages) return finished;
+    if (status != null && all.contains(status)) {
+      return status == finished ? reading : status;
+    }
     if (shelved) return BookStatus.shelved;
     return reading;
   }

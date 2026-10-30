@@ -217,11 +217,22 @@ class ReadingRepository {
     }
     await (db.update(db.books)..where((t) => t.id.equals(id))).write(effective);
     final book = await getBook(id);
-    if (book == null || book.totalPages <= 0) return;
-    if (book.currentPage >= book.totalPages &&
-        (book.status == BookStatus.reading ||
-            book.status == BookStatus.finished)) {
-      await _finishRound(id, book.round, completed: true);
+    if (book == null) return;
+    await _syncBookCompletion(book);
+  }
+
+  /// 根据当前进度自动判定「已读」。
+  ///
+  /// 进度达到总页数时自动标为已读；如果之后进度被调低（例如撤销任务），
+  /// 已读状态会自动回到在读。
+  Future<void> _syncBookCompletion(Book book) async {
+    if (book.totalPages <= 0) return;
+    if (book.currentPage >= book.totalPages) {
+      await _finishRound(book.id, book.round, completed: true);
+    } else if (book.status == BookStatus.finished) {
+      await (db.update(db.books)..where((t) => t.id.equals(book.id))).write(
+        const BooksCompanion(status: Value(BookStatus.reading)),
+      );
     }
   }
 
@@ -619,6 +630,8 @@ class ReadingRepository {
           currentPage: Value(effectiveReached.clamp(0, book.totalPages)),
         ),
       );
+      final updated = await getBook(book.id);
+      if (updated != null) await _syncBookCompletion(updated);
     }
     await reschedulePlan(task.planId);
   }
@@ -640,6 +653,8 @@ class ReadingRepository {
       await (db.update(db.books)..where((t) => t.id.equals(book.id))).write(
         BooksCompanion(currentPage: Value(task.startPage - 1)),
       );
+      final updated = await getBook(book.id);
+      if (updated != null) await _syncBookCompletion(updated);
     }
     await reschedulePlan(task.planId);
   }
@@ -741,8 +756,9 @@ class ReadingRepository {
 
     final date = logicalDate(when, settings.settlementMinutes);
     final task = await taskForBookOnDate(bookId, date);
-    final status =
-        book.status == BookStatus.finished ? book.status : BookStatus.reading;
+    final status = book.status == BookStatus.finished
+        ? book.status
+        : BookStatus.reading;
 
     await db
         .into(db.readingSessions)
@@ -759,10 +775,7 @@ class ReadingRepository {
         );
 
     await (db.update(db.books)..where((t) => t.id.equals(bookId))).write(
-      BooksCompanion(
-        currentPage: Value(reached),
-        status: Value(status),
-      ),
+      BooksCompanion(currentPage: Value(reached), status: Value(status)),
     );
 
     if (task != null) {
@@ -775,9 +788,9 @@ class ReadingRepository {
       }
     }
 
-    if (reached >= book.totalPages) {
-      await _finishRound(bookId, book.round, completed: true);
-    } else if (status == BookStatus.reading) {
+    final updated = await getBook(bookId);
+    if (updated != null) await _syncBookCompletion(updated);
+    if (reached < book.totalPages && status == BookStatus.reading) {
       final plan = await getPlanForBook(bookId);
       if (plan != null) await reschedulePlan(plan.id);
     }
@@ -884,6 +897,8 @@ class ReadingRepository {
         BooksCompanion(currentPage: Value(effectiveReached)),
       );
     }
+    final updatedBook = await getBook(bookId);
+    if (updatedBook != null) await _syncBookCompletion(updatedBook);
 
     // 达到今天的目标页数就自动完成任务。
     if (task != null && !completeTask) {

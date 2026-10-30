@@ -681,4 +681,34 @@ void main() {
     expect(stats.timedPages, 10);
     expect(stats.averagePagesPerHour, closeTo(60, 0.001));
   });
+
+  test('进度读满自动标记已读，撤销后自动回到在读', () async {
+    final id = await repo.createBook(title: '自动已读', totalPages: 10);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: today(),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final task = (await repo.tasksBetween(today(), today())).single;
+
+    await repo.completeTask(task.task.id);
+    var book = await repo.getBook(id);
+    expect(book!.currentPage, 10);
+    expect(book.status, BookStatus.finished);
+
+    await repo.reopenTask(task.task.id);
+    book = await repo.getBook(id);
+    expect(book!.currentPage, 0);
+    expect(book.status, BookStatus.reading);
+  });
+
+  test('手动补记页数读满时也会自动标记已读', () async {
+    final id = await repo.createBook(title: '补记已读', totalPages: 20);
+    await repo.logPagesRead(bookId: id, reachedPage: 20);
+    final book = await repo.getBook(id);
+    expect(book!.status, BookStatus.finished);
+    expect(book.currentPage, 20);
+  });
 }
