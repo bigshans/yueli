@@ -158,6 +158,82 @@ class ReadingRepository {
     )..where((t) => t.id.equals(id))).watchSingleOrNull();
   }
 
+  Future<WereadLink?> getWereadLink(int bookId) {
+    return (db.select(
+      db.wereadLinks,
+    )..where((t) => t.bookId.equals(bookId))).getSingleOrNull();
+  }
+
+  Stream<WereadLink?> watchWereadLink(int bookId) {
+    return (db.select(
+      db.wereadLinks,
+    )..where((t) => t.bookId.equals(bookId))).watchSingleOrNull();
+  }
+
+  Future<List<WereadLink>> allWereadLinks() => db.select(db.wereadLinks).get();
+
+  Future<WereadLink?> getWereadLinkByWereadId(String wereadBookId) {
+    return (db.select(
+      db.wereadLinks,
+    )..where((t) => t.wereadBookId.equals(wereadBookId))).getSingleOrNull();
+  }
+
+  Future<void> linkWereadBook({
+    required int bookId,
+    required String wereadBookId,
+    String? readerLink,
+    String? deepLink,
+    int remoteProgress = 0,
+    int? remoteReadSeconds,
+    bool remoteFinished = false,
+    DateTime? remoteUpdatedAt,
+  }) async {
+    await (db.delete(
+      db.wereadLinks,
+    )..where((t) => t.bookId.equals(bookId))).go();
+    await db
+        .into(db.wereadLinks)
+        .insert(
+          WereadLinksCompanion.insert(
+            bookId: bookId,
+            wereadBookId: wereadBookId,
+            readerLink: Value(readerLink),
+            deepLink: Value(deepLink),
+            remoteProgress: Value(remoteProgress),
+            remoteReadSeconds: Value(remoteReadSeconds),
+            remoteFinished: Value(remoteFinished),
+            remoteUpdatedAt: Value(remoteUpdatedAt),
+            lastSyncedAt: Value(DateTime.now()),
+          ),
+        );
+  }
+
+  Future<void> updateWereadLinkSync(
+    int bookId, {
+    required int remoteProgress,
+    int? remoteReadSeconds,
+    required bool remoteFinished,
+    DateTime? remoteUpdatedAt,
+  }) async {
+    await (db.update(
+      db.wereadLinks,
+    )..where((t) => t.bookId.equals(bookId))).write(
+      WereadLinksCompanion(
+        remoteProgress: Value(remoteProgress),
+        remoteReadSeconds: Value(remoteReadSeconds),
+        remoteFinished: Value(remoteFinished),
+        remoteUpdatedAt: Value(remoteUpdatedAt),
+        lastSyncedAt: Value(DateTime.now()),
+      ),
+    );
+  }
+
+  Future<void> unlinkWereadBook(int bookId) async {
+    await (db.delete(
+      db.wereadLinks,
+    )..where((t) => t.bookId.equals(bookId))).go();
+  }
+
   Future<int> createBook({
     required String title,
     String? author,
@@ -262,6 +338,27 @@ class ReadingRepository {
 
   Future<void> deleteBook(int id) async {
     await (db.delete(db.books)..where((t) => t.id.equals(id))).go();
+  }
+
+  /// 从所有书籍中删除一个标签。返回受影响的书籍数量。
+  Future<int> deleteTagGlobally(String tag) async {
+    final target = tag.trim();
+    if (target.isEmpty) return 0;
+    final books = await db.select(db.books).get();
+    var changed = 0;
+    await db.transaction(() async {
+      for (final book in books) {
+        final tags = parseTags(book.tags);
+        if (!tags.contains(target)) continue;
+        final next = tags.where((item) => item != target).toList();
+        final encoded = encodeTags(next);
+        await (db.update(db.books)..where((t) => t.id.equals(book.id))).write(
+          BooksCompanion(tags: Value(encoded.isEmpty ? null : encoded)),
+        );
+        changed++;
+      }
+    });
+    return changed;
   }
 
   /// 修改阅读状态。

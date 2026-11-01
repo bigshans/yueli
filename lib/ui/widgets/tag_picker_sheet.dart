@@ -7,6 +7,7 @@ Future<Set<String>?> showTagPickerSheet(
   required Set<String> selected,
   String title = '选择标签',
   bool allowCreate = false,
+  Future<void> Function(String tag)? onDeleteTag,
 }) {
   return showModalBottomSheet<Set<String>>(
     context: context,
@@ -19,6 +20,7 @@ Future<Set<String>?> showTagPickerSheet(
       initialSelected: selected,
       title: title,
       allowCreate: allowCreate,
+      onDeleteTag: onDeleteTag,
     ),
   );
 }
@@ -30,12 +32,14 @@ class TagPickerSheet extends StatefulWidget {
     required this.initialSelected,
     this.title = '选择标签',
     this.allowCreate = false,
+    this.onDeleteTag,
   });
 
   final List<String> allTags;
   final Set<String> initialSelected;
   final String title;
   final bool allowCreate;
+  final Future<void> Function(String tag)? onDeleteTag;
 
   @override
   State<TagPickerSheet> createState() => _TagPickerSheetState();
@@ -68,6 +72,44 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
       _selected.add(tag);
       _query = '';
       _search.clear();
+    });
+  }
+
+  Future<void> _deleteTag(String tag) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('删除标签？'),
+        content: Text('将从所有书籍中删除标签 #$tag，且无法撤销。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await widget.onDeleteTag?.call(tag);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('删除标签失败：$e')));
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _tags.remove(tag);
+      _selected.remove(tag);
     });
   }
 
@@ -146,6 +188,12 @@ class _TagPickerSheetState extends State<TagPickerSheet> {
                         onSelected: (on) => setState(() {
                           on ? _selected.add(tag) : _selected.remove(tag);
                         }),
+                        onDeleted: widget.onDeleteTag == null
+                            ? null
+                            : () => _deleteTag(tag),
+                        deleteIcon: widget.onDeleteTag == null
+                            ? null
+                            : const Icon(Icons.close, size: 16),
                       ),
                     if (canCreate)
                       ActionChip(

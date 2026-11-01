@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "com.example.reader_management"
-    compileSdk = flutter.compileSdkVersion
+    // flutter_secure_storage 10.x 需要 compileSdk 36。
+    compileSdk = 36
     // 插件的原生库要求 NDK 27。
     ndkVersion = "27.0.12077973"
 
@@ -27,7 +28,8 @@ android {
         applicationId = "com.example.reader_management"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // flutter_secure_storage 10.x 需要 Android 6.0（API 23）以上。
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName

@@ -470,6 +470,25 @@ void main() {
     expect(parseTags(null), isEmpty);
   });
 
+  test('全局删除标签会从所有书籍中移除', () async {
+    final a = await repo.createBook(
+      title: '书 A',
+      totalPages: 100,
+      tags: encodeTags(['小说', '测试']),
+    );
+    final b = await repo.createBook(
+      title: '书 B',
+      totalPages: 100,
+      tags: encodeTags(['小说', '技术']),
+    );
+
+    final changed = await repo.deleteTagGlobally('小说');
+    expect(changed, 2);
+    expect(parseTags((await repo.getBook(a))!.tags), ['测试']);
+    expect(parseTags((await repo.getBook(b))!.tags), ['技术']);
+    expect(await repo.deleteTagGlobally('不存在'), 0);
+  });
+
   test('重读：轮次递增、进度归零、保留旧记录', () async {
     final id = await repo.createBook(title: '书', totalPages: 100);
     // 第一遍读完

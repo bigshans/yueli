@@ -262,6 +262,10 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
       selected: _selectedTags,
       title: '选择标签',
       allowCreate: true,
+      onDeleteTag: (tag) async {
+        await ref.read(repositoryProvider).deleteTagGlobally(tag);
+        if (mounted) setState(() => _selectedTags.remove(tag));
+      },
     );
     if (picked != null && mounted) {
       setState(() {

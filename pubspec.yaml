@@ -46,6 +46,9 @@ dependencies:
   archive: ^4.5.1
   cached_network_image: ^3.4.1
   path_provider: ^2.1.5
+  http: ^1.6.0
+  flutter_secure_storage: ^10.3.4
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/date_x.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
+import '../services/weread/weread_client.dart';
+import '../services/weread/weread_credentials.dart';
+import '../services/weread/weread_import_service.dart';
+import '../services/weread/weread_sync_service.dart';
 
 /// 全局数据库实例。
 final databaseProvider = Provider<AppDatabase>((ref) {
@@ -13,6 +17,38 @@ final databaseProvider = Provider<AppDatabase>((ref) {
 
 final repositoryProvider = Provider<ReadingRepository>((ref) {
   return ReadingRepository(ref.watch(databaseProvider));
+});
+
+/// 微信读书官方 Gateway 客户端。
+final wereadClientProvider = Provider<WereadClient>((ref) {
+  final client = WereadClient();
+  ref.onDispose(client.close);
+  return client;
+});
+
+/// 微信读书 API Key 的安全存储。
+final wereadCredentialsProvider = Provider<WereadCredentials>((ref) {
+  return WereadCredentials();
+});
+
+/// 微信读书进度同步服务。
+final wereadSyncServiceProvider = Provider<WereadSyncService>((ref) {
+  final credentials = ref.watch(wereadCredentialsProvider);
+  return WereadSyncService(
+    client: ref.watch(wereadClientProvider),
+    repository: ref.watch(repositoryProvider),
+    apiKeyLoader: credentials.readApiKey,
+  );
+});
+
+/// 微信读书书架导入服务。
+final wereadImportServiceProvider = Provider<WereadImportService>((ref) {
+  final credentials = ref.watch(wereadCredentialsProvider);
+  return WereadImportService(
+    client: ref.watch(wereadClientProvider),
+    repository: ref.watch(repositoryProvider),
+    apiKeyLoader: credentials.readApiKey,
+  );
 });
 
 final settingsProvider = StreamProvider<AppSetting>((ref) {
@@ -42,6 +78,14 @@ final booksProvider = StreamProvider<List<Book>>((ref) {
 
 final bookProvider = StreamProvider.family<Book?, int>((ref, bookId) {
   return ref.watch(repositoryProvider).watchBook(bookId);
+});
+
+/// 某本书的微信读书关联（未绑定时为 null）。
+final wereadLinkProvider = StreamProvider.family<WereadLink?, int>((
+  ref,
+  bookId,
+) {
+  return ref.watch(repositoryProvider).watchWereadLink(bookId);
 });
 
 final planForBookProvider = StreamProvider.family<Plan?, int>((ref, bookId) {

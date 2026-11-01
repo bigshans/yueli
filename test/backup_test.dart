@@ -51,6 +51,12 @@ void main() {
     final plan = await repo.getPlanForBook(id);
     await repo.addRestDay(plan!.id, addDays(today(), 2));
 
+    await repo.linkWereadBook(
+      bookId: id,
+      wereadBookId: 'wr-book-1',
+      remoteProgress: 15,
+      remoteFinished: false,
+    );
     await repo.updateSettings(settlementMinutes: 4 * 60);
     final t0 = today().add(const Duration(hours: 9));
     await repo.startTimer(bookId: id, now: t0);
@@ -76,6 +82,7 @@ void main() {
     expect(summary.plans, 1);
     expect(summary.sessions, 1);
     expect(summary.readings, 1);
+    expect(summary.wereadLinks, 1);
 
     final books = await repo.allBooks();
     expect(books.length, 1);
@@ -97,6 +104,9 @@ void main() {
     expect(books.single.rating, 8.7);
     expect(books.single.ratingCount, 1234);
     expect(books.single.metadataSource, 'weread');
+    final restoredLink = await repo.getWereadLink(id);
+    expect(restoredLink?.wereadBookId, 'wr-book-1');
+    expect(restoredLink?.remoteProgress, 15);
 
     final restoredPlan = await repo.getPlanForBook(id);
     expect(restoredPlan!.id, plan!.id);

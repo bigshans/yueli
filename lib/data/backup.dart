@@ -26,6 +26,7 @@ class ImportSummary {
     required this.sessions,
     required this.readings,
     required this.restDays,
+    required this.wereadLinks,
   });
 
   final int books;
@@ -34,11 +35,13 @@ class ImportSummary {
   final int sessions;
   final int readings;
   final int restDays;
+  final int wereadLinks;
 
   @override
   String toString() =>
       '读物 $books 本 · 计划 $plans 个 · 任务 $tasks 条 · '
-      '计时 $sessions 次 · 阅读轮次 $readings 条 · 休息日 $restDays 天';
+      '计时 $sessions 次 · 阅读轮次 $readings 条 · 休息日 $restDays 天 · '
+      '微信读书关联 $wereadLinks 条';
 }
 
 /// 阅历数据的完整导出 / 导入。
@@ -104,6 +107,7 @@ class BackupService {
     final sessions = await db.select(db.readingSessions).get();
     final readings = await db.select(db.readings).get();
     final restDays = await db.select(db.restDays).get();
+    final wereadLinks = await db.select(db.wereadLinks).get();
     final settings = await db.loadSettings();
 
     return const JsonEncoder.withIndent('  ').convert({
@@ -117,6 +121,7 @@ class BackupService {
         'readingSessions': sessions.map(_sessionToJson).toList(),
         'readings': readings.map(_readingToJson).toList(),
         'restDays': restDays.map(_restDayToJson).toList(),
+        'wereadLinks': wereadLinks.map(_wereadLinkToJson).toList(),
         'settings': {
           'pagesPerHour': settings.pagesPerHour,
           'defaultDailyMinutes': settings.defaultDailyMinutes,
@@ -197,6 +202,7 @@ class BackupService {
     final sessions = _asList(data['readingSessions']);
     final readings = _asList(data['readings']);
     final restDays = _asList(data['restDays']);
+    final wereadLinks = _asList(data['wereadLinks']);
     final settings = data['settings'];
 
     await db.transaction(() async {
@@ -205,6 +211,7 @@ class BackupService {
       await db.delete(db.tasks).go();
       await db.delete(db.restDays).go();
       await db.delete(db.readings).go();
+      await db.delete(db.wereadLinks).go();
       await db.delete(db.plans).go();
       await db.delete(db.books).go();
 
@@ -213,6 +220,9 @@ class BackupService {
       }
       for (final row in readings) {
         await db.into(db.readings).insert(_readingFromJson(row));
+      }
+      for (final row in wereadLinks) {
+        await db.into(db.wereadLinks).insert(_wereadLinkFromJson(row));
       }
       for (final row in plans) {
         await db.into(db.plans).insert(_planFromJson(row));
@@ -249,6 +259,7 @@ class BackupService {
       sessions: sessions.length,
       readings: readings.length,
       restDays: restDays.length,
+      wereadLinks: wereadLinks.length,
     );
   }
 
@@ -282,6 +293,20 @@ class BackupService {
     'manualPagesPerHour': b.manualPagesPerHour,
     'measuredPagesPerHour': b.measuredPagesPerHour,
     'createdAt': b.createdAt.toIso8601String(),
+  };
+
+  Map<String, Object?> _wereadLinkToJson(WereadLink link) => {
+    'id': link.id,
+    'bookId': link.bookId,
+    'wereadBookId': link.wereadBookId,
+    'readerLink': link.readerLink,
+    'deepLink': link.deepLink,
+    'remoteProgress': link.remoteProgress,
+    'remoteReadSeconds': link.remoteReadSeconds,
+    'remoteFinished': link.remoteFinished,
+    'remoteUpdatedAt': link.remoteUpdatedAt?.toIso8601String(),
+    'lastSyncedAt': link.lastSyncedAt?.toIso8601String(),
+    'createdAt': link.createdAt.toIso8601String(),
   };
 
   Map<String, Object?> _planToJson(Plan p) => {
@@ -374,6 +399,21 @@ class BackupService {
     measuredPagesPerHour: Value(_asNullableDouble(m['measuredPagesPerHour'])),
     createdAt: Value(_asDate(m['createdAt'])),
   );
+
+  WereadLinksCompanion _wereadLinkFromJson(Map<String, dynamic> m) =>
+      WereadLinksCompanion(
+        id: Value(_asInt(m['id'], 0)),
+        bookId: Value(_asInt(m['bookId'], 0)),
+        wereadBookId: Value(_asString(m['wereadBookId'], '')),
+        readerLink: Value(_asNullableString(m['readerLink'])),
+        deepLink: Value(_asNullableString(m['deepLink'])),
+        remoteProgress: Value(_asInt(m['remoteProgress'], 0)),
+        remoteReadSeconds: Value(_asNullableInt(m['remoteReadSeconds'])),
+        remoteFinished: Value(_asBool(m['remoteFinished'])),
+        remoteUpdatedAt: Value(_asNullableDate(m['remoteUpdatedAt'])),
+        lastSyncedAt: Value(_asNullableDate(m['lastSyncedAt'])),
+        createdAt: Value(_asDate(m['createdAt'])),
+      );
 
   PlansCompanion _planFromJson(Map<String, dynamic> m) => PlansCompanion(
     id: Value(_asInt(m['id'], 0)),

@@ -8,6 +8,7 @@ part 'database.g.dart';
 @DriftDatabase(
   tables: [
     Books,
+    WereadLinks,
     Plans,
     Tasks,
     ReadingSessions,
@@ -22,7 +23,7 @@ class AppDatabase extends _$AppDatabase {
   static QueryExecutor _open() => driftDatabase(name: 'reader_management');
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(

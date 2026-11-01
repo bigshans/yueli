@@ -7,10 +7,12 @@ import '../data/book_status.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
 import '../domain/scheduling/scheduler.dart';
+import '../services/weread/weread_launcher.dart';
 import '../state/providers.dart';
 import 'book_form_page.dart';
 import 'plan_editor_page.dart';
 import 'stats_page.dart';
+import 'weread_bind_page.dart';
 import 'widgets/book_cover.dart';
 import 'widgets/task_card.dart';
 import 'widgets/timer_banner.dart';
@@ -64,6 +66,7 @@ class BookDetailPage extends ConsumerWidget {
                     ),
                 ],
               ),
+              _WereadActionsButton(book: book),
               IconButton(
                 tooltip: '编辑',
                 icon: const Icon(Icons.edit_outlined),
@@ -90,6 +93,8 @@ class BookDetailPage extends ConsumerWidget {
                 icon: Icon(timingThis ? Icons.stop : Icons.play_arrow),
                 label: Text(timingThis ? '结束计时' : '开始计时阅读'),
               ),
+              const SizedBox(height: 16),
+              _WereadCard(book: book),
               const SizedBox(height: 16),
               if (_BookInfoCard.hasContent(book)) ...[
                 _BookInfoCard(book: book),
@@ -430,6 +435,334 @@ class _DescriptionCardState extends State<_DescriptionCard> {
               child: Text(_expanded ? '收起' : '展开'),
             ),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WereadCard extends ConsumerWidget {
+  const _WereadCard({required this.book});
+  final Book book;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final linkAsync = ref.watch(wereadLinkProvider(book.id));
+    return linkAsync.maybeWhen(
+      data: (link) => link == null
+          ? _WereadBindCard(book: book)
+          : _WereadLinkedCard(book: book, link: link),
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _WereadBindCard extends ConsumerWidget {
+  const _WereadBindCard({required this.book});
+  final Book book;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    return _SectionCard(
+      title: '微信读书',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '还没有绑定微信读书。绑定后可以打开阅读链接，并同步微信读书的阅读进度。',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: () async {
+              final linked = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(
+                  builder: (_) =>
+                      WereadBindPage(bookId: book.id, bookTitle: book.title),
+                ),
+              );
+              if (linked == true && context.mounted) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已绑定微信读书')));
+              }
+            },
+            icon: const Icon(Icons.link),
+            label: const Text('绑定微信读书'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _WereadAction { open, sync, unbind }
+
+class _WereadActionsButton extends ConsumerStatefulWidget {
+  const _WereadActionsButton({required this.book});
+  final Book book;
+
+  @override
+  ConsumerState<_WereadActionsButton> createState() =>
+      _WereadActionsButtonState();
+}
+
+class _WereadActionsButtonState extends ConsumerState<_WereadActionsButton> {
+  bool _busy = false;
+
+  Future<void> _open(WereadLink link) async {
+    try {
+      await openWereadBookLink(
+        readerLink: link.readerLink,
+        deepLink: link.deepLink,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('打开失败：$e')));
+    }
+  }
+
+  Future<void> _sync() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final service = ref.read(wereadSyncServiceProvider);
+      final result = await service.syncBook(widget.book.id);
+      if (!mounted) return;
+
+      if (!result.finished &&
+          result.remoteProgress < 100 &&
+          result.estimatedPage > result.localPage) {
+        final apply = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('按比例更新本地页码？'),
+            content: Text(
+              '微信读书进度为 ${result.remoteProgress}%。\n'
+              '按本地总页数换算，约为第 ${result.estimatedPage} 页。\n\n'
+              '微信读书的进度百分比和本地页码并不等同，这只是估算。',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('仅记录进度'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('更新本地页码'),
+              ),
+            ],
+          ),
+        );
+        if (apply == true) {
+          await service.applyEstimatedPage(
+            widget.book.id,
+            result.estimatedPage,
+          );
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '已按估算更新到第 ${result.estimatedPage} 页。'
+                '如需精确页码，可以手动修改。',
+              ),
+            ),
+          );
+          return;
+        }
+        if (!mounted) return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('同步失败：$e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _unbind() async {
+    if (_busy) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('解除微信读书绑定？'),
+        content: const Text('只会解除关联，不会删除本地书籍和阅读记录。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('解除绑定'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await ref.read(repositoryProvider).unlinkWereadBook(widget.book.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已解除微信读书绑定')));
+  }
+
+  Future<void> _handle(_WereadAction action, WereadLink link) async {
+    switch (action) {
+      case _WereadAction.open:
+        await _open(link);
+      case _WereadAction.sync:
+        await _sync();
+      case _WereadAction.unbind:
+        await _unbind();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final link = ref.watch(wereadLinkProvider(widget.book.id)).valueOrNull;
+    if (link == null) return const SizedBox.shrink();
+    return PopupMenuButton<_WereadAction>(
+      tooltip: '微信读书',
+      enabled: !_busy,
+      icon: _busy
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.cloud_outlined),
+      onSelected: (action) => _handle(action, link),
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: _WereadAction.open,
+          child: Row(
+            children: [
+              Icon(Icons.open_in_new, size: 18),
+              SizedBox(width: 10),
+              Text('打开阅读'),
+            ],
+          ),
+        ),
+        PopupMenuItem(
+          value: _WereadAction.sync,
+          child: Row(
+            children: [
+              Icon(Icons.sync, size: 18),
+              SizedBox(width: 10),
+              Text('同步进度'),
+            ],
+          ),
+        ),
+        PopupMenuDivider(),
+        PopupMenuItem(
+          value: _WereadAction.unbind,
+          child: Row(
+            children: [
+              Icon(Icons.link_off, size: 18),
+              SizedBox(width: 10),
+              Text('解除绑定'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WereadLinkedCard extends StatelessWidget {
+  const _WereadLinkedCard({required this.book, required this.link});
+  final Book book;
+  final WereadLink link;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final readTime = link.remoteReadSeconds == null
+        ? ''
+        : formatReadSeconds(link.remoteReadSeconds!);
+    return _SectionCard(
+      title: '微信读书',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.cloud_done_outlined,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                '已绑定',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              if (link.lastSyncedAt != null)
+                Text(
+                  '同步于 ${formatRelativeDate(link.lastSyncedAt)}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: (link.remoteProgress / 100).clamp(0.0, 1.0),
+              minHeight: 6,
+              backgroundColor: theme.colorScheme.surfaceContainerHighest,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Text(
+                '微信读书进度 ${link.remoteProgress}%',
+                style: theme.textTheme.bodySmall,
+              ),
+              if (readTime.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                Text(
+                  '累计 $readTime',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '微信读书进度是百分比，本地是页码；按比例换算只能作为估算。',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '打开阅读、同步进度、解除绑定在右上角微信读书菜单。',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
         ],
       ),
     );

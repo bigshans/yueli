@@ -1345,6 +1345,697 @@ class BooksCompanion extends UpdateCompanion<Book> {
   }
 }
 
+class $WereadLinksTable extends WereadLinks
+    with TableInfo<$WereadLinksTable, WereadLink> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $WereadLinksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _bookIdMeta = const VerificationMeta('bookId');
+  @override
+  late final GeneratedColumn<int> bookId = GeneratedColumn<int>(
+    'book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'UNIQUE REFERENCES books (id) ON DELETE CASCADE',
+    ),
+  );
+  static const VerificationMeta _wereadBookIdMeta = const VerificationMeta(
+    'wereadBookId',
+  );
+  @override
+  late final GeneratedColumn<String> wereadBookId = GeneratedColumn<String>(
+    'weread_book_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways('UNIQUE'),
+  );
+  static const VerificationMeta _readerLinkMeta = const VerificationMeta(
+    'readerLink',
+  );
+  @override
+  late final GeneratedColumn<String> readerLink = GeneratedColumn<String>(
+    'reader_link',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _deepLinkMeta = const VerificationMeta(
+    'deepLink',
+  );
+  @override
+  late final GeneratedColumn<String> deepLink = GeneratedColumn<String>(
+    'deep_link',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _remoteProgressMeta = const VerificationMeta(
+    'remoteProgress',
+  );
+  @override
+  late final GeneratedColumn<int> remoteProgress = GeneratedColumn<int>(
+    'remote_progress',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _remoteReadSecondsMeta = const VerificationMeta(
+    'remoteReadSeconds',
+  );
+  @override
+  late final GeneratedColumn<int> remoteReadSeconds = GeneratedColumn<int>(
+    'remote_read_seconds',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _remoteFinishedMeta = const VerificationMeta(
+    'remoteFinished',
+  );
+  @override
+  late final GeneratedColumn<bool> remoteFinished = GeneratedColumn<bool>(
+    'remote_finished',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("remote_finished" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
+  );
+  static const VerificationMeta _remoteUpdatedAtMeta = const VerificationMeta(
+    'remoteUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> remoteUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'remote_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
+  static const VerificationMeta _lastSyncedAtMeta = const VerificationMeta(
+    'lastSyncedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> lastSyncedAt = GeneratedColumn<DateTime>(
+    'last_synced_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _createdAtMeta = const VerificationMeta(
+    'createdAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+    'created_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+    defaultValue: currentDateAndTime,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    bookId,
+    wereadBookId,
+    readerLink,
+    deepLink,
+    remoteProgress,
+    remoteReadSeconds,
+    remoteFinished,
+    remoteUpdatedAt,
+    lastSyncedAt,
+    createdAt,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'weread_links';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<WereadLink> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('book_id')) {
+      context.handle(
+        _bookIdMeta,
+        bookId.isAcceptableOrUnknown(data['book_id']!, _bookIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_bookIdMeta);
+    }
+    if (data.containsKey('weread_book_id')) {
+      context.handle(
+        _wereadBookIdMeta,
+        wereadBookId.isAcceptableOrUnknown(
+          data['weread_book_id']!,
+          _wereadBookIdMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_wereadBookIdMeta);
+    }
+    if (data.containsKey('reader_link')) {
+      context.handle(
+        _readerLinkMeta,
+        readerLink.isAcceptableOrUnknown(data['reader_link']!, _readerLinkMeta),
+      );
+    }
+    if (data.containsKey('deep_link')) {
+      context.handle(
+        _deepLinkMeta,
+        deepLink.isAcceptableOrUnknown(data['deep_link']!, _deepLinkMeta),
+      );
+    }
+    if (data.containsKey('remote_progress')) {
+      context.handle(
+        _remoteProgressMeta,
+        remoteProgress.isAcceptableOrUnknown(
+          data['remote_progress']!,
+          _remoteProgressMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remote_read_seconds')) {
+      context.handle(
+        _remoteReadSecondsMeta,
+        remoteReadSeconds.isAcceptableOrUnknown(
+          data['remote_read_seconds']!,
+          _remoteReadSecondsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remote_finished')) {
+      context.handle(
+        _remoteFinishedMeta,
+        remoteFinished.isAcceptableOrUnknown(
+          data['remote_finished']!,
+          _remoteFinishedMeta,
+        ),
+      );
+    }
+    if (data.containsKey('remote_updated_at')) {
+      context.handle(
+        _remoteUpdatedAtMeta,
+        remoteUpdatedAt.isAcceptableOrUnknown(
+          data['remote_updated_at']!,
+          _remoteUpdatedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('last_synced_at')) {
+      context.handle(
+        _lastSyncedAtMeta,
+        lastSyncedAt.isAcceptableOrUnknown(
+          data['last_synced_at']!,
+          _lastSyncedAtMeta,
+        ),
+      );
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(
+        _createdAtMeta,
+        createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta),
+      );
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  WereadLink map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return WereadLink(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      bookId: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}book_id'],
+      )!,
+      wereadBookId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}weread_book_id'],
+      )!,
+      readerLink: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}reader_link'],
+      ),
+      deepLink: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}deep_link'],
+      ),
+      remoteProgress: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}remote_progress'],
+      )!,
+      remoteReadSeconds: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}remote_read_seconds'],
+      ),
+      remoteFinished: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}remote_finished'],
+      )!,
+      remoteUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}remote_updated_at'],
+      ),
+      lastSyncedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}last_synced_at'],
+      ),
+      createdAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}created_at'],
+      )!,
+    );
+  }
+
+  @override
+  $WereadLinksTable createAlias(String alias) {
+    return $WereadLinksTable(attachedDatabase, alias);
+  }
+}
+
+class WereadLink extends DataClass implements Insertable<WereadLink> {
+  final int id;
+  final int bookId;
+  final String wereadBookId;
+  final String? readerLink;
+  final String? deepLink;
+
+  /// 微信读书阅读进度百分比，0-100。
+  final int remoteProgress;
+
+  /// 微信读书累计阅读时长（秒）。
+  final int? remoteReadSeconds;
+  final bool remoteFinished;
+  final DateTime? remoteUpdatedAt;
+  final DateTime? lastSyncedAt;
+  final DateTime createdAt;
+  const WereadLink({
+    required this.id,
+    required this.bookId,
+    required this.wereadBookId,
+    this.readerLink,
+    this.deepLink,
+    required this.remoteProgress,
+    this.remoteReadSeconds,
+    required this.remoteFinished,
+    this.remoteUpdatedAt,
+    this.lastSyncedAt,
+    required this.createdAt,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['book_id'] = Variable<int>(bookId);
+    map['weread_book_id'] = Variable<String>(wereadBookId);
+    if (!nullToAbsent || readerLink != null) {
+      map['reader_link'] = Variable<String>(readerLink);
+    }
+    if (!nullToAbsent || deepLink != null) {
+      map['deep_link'] = Variable<String>(deepLink);
+    }
+    map['remote_progress'] = Variable<int>(remoteProgress);
+    if (!nullToAbsent || remoteReadSeconds != null) {
+      map['remote_read_seconds'] = Variable<int>(remoteReadSeconds);
+    }
+    map['remote_finished'] = Variable<bool>(remoteFinished);
+    if (!nullToAbsent || remoteUpdatedAt != null) {
+      map['remote_updated_at'] = Variable<DateTime>(remoteUpdatedAt);
+    }
+    if (!nullToAbsent || lastSyncedAt != null) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt);
+    }
+    map['created_at'] = Variable<DateTime>(createdAt);
+    return map;
+  }
+
+  WereadLinksCompanion toCompanion(bool nullToAbsent) {
+    return WereadLinksCompanion(
+      id: Value(id),
+      bookId: Value(bookId),
+      wereadBookId: Value(wereadBookId),
+      readerLink: readerLink == null && nullToAbsent
+          ? const Value.absent()
+          : Value(readerLink),
+      deepLink: deepLink == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deepLink),
+      remoteProgress: Value(remoteProgress),
+      remoteReadSeconds: remoteReadSeconds == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteReadSeconds),
+      remoteFinished: Value(remoteFinished),
+      remoteUpdatedAt: remoteUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(remoteUpdatedAt),
+      lastSyncedAt: lastSyncedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(lastSyncedAt),
+      createdAt: Value(createdAt),
+    );
+  }
+
+  factory WereadLink.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return WereadLink(
+      id: serializer.fromJson<int>(json['id']),
+      bookId: serializer.fromJson<int>(json['bookId']),
+      wereadBookId: serializer.fromJson<String>(json['wereadBookId']),
+      readerLink: serializer.fromJson<String?>(json['readerLink']),
+      deepLink: serializer.fromJson<String?>(json['deepLink']),
+      remoteProgress: serializer.fromJson<int>(json['remoteProgress']),
+      remoteReadSeconds: serializer.fromJson<int?>(json['remoteReadSeconds']),
+      remoteFinished: serializer.fromJson<bool>(json['remoteFinished']),
+      remoteUpdatedAt: serializer.fromJson<DateTime?>(json['remoteUpdatedAt']),
+      lastSyncedAt: serializer.fromJson<DateTime?>(json['lastSyncedAt']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bookId': serializer.toJson<int>(bookId),
+      'wereadBookId': serializer.toJson<String>(wereadBookId),
+      'readerLink': serializer.toJson<String?>(readerLink),
+      'deepLink': serializer.toJson<String?>(deepLink),
+      'remoteProgress': serializer.toJson<int>(remoteProgress),
+      'remoteReadSeconds': serializer.toJson<int?>(remoteReadSeconds),
+      'remoteFinished': serializer.toJson<bool>(remoteFinished),
+      'remoteUpdatedAt': serializer.toJson<DateTime?>(remoteUpdatedAt),
+      'lastSyncedAt': serializer.toJson<DateTime?>(lastSyncedAt),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+    };
+  }
+
+  WereadLink copyWith({
+    int? id,
+    int? bookId,
+    String? wereadBookId,
+    Value<String?> readerLink = const Value.absent(),
+    Value<String?> deepLink = const Value.absent(),
+    int? remoteProgress,
+    Value<int?> remoteReadSeconds = const Value.absent(),
+    bool? remoteFinished,
+    Value<DateTime?> remoteUpdatedAt = const Value.absent(),
+    Value<DateTime?> lastSyncedAt = const Value.absent(),
+    DateTime? createdAt,
+  }) => WereadLink(
+    id: id ?? this.id,
+    bookId: bookId ?? this.bookId,
+    wereadBookId: wereadBookId ?? this.wereadBookId,
+    readerLink: readerLink.present ? readerLink.value : this.readerLink,
+    deepLink: deepLink.present ? deepLink.value : this.deepLink,
+    remoteProgress: remoteProgress ?? this.remoteProgress,
+    remoteReadSeconds: remoteReadSeconds.present
+        ? remoteReadSeconds.value
+        : this.remoteReadSeconds,
+    remoteFinished: remoteFinished ?? this.remoteFinished,
+    remoteUpdatedAt: remoteUpdatedAt.present
+        ? remoteUpdatedAt.value
+        : this.remoteUpdatedAt,
+    lastSyncedAt: lastSyncedAt.present ? lastSyncedAt.value : this.lastSyncedAt,
+    createdAt: createdAt ?? this.createdAt,
+  );
+  WereadLink copyWithCompanion(WereadLinksCompanion data) {
+    return WereadLink(
+      id: data.id.present ? data.id.value : this.id,
+      bookId: data.bookId.present ? data.bookId.value : this.bookId,
+      wereadBookId: data.wereadBookId.present
+          ? data.wereadBookId.value
+          : this.wereadBookId,
+      readerLink: data.readerLink.present
+          ? data.readerLink.value
+          : this.readerLink,
+      deepLink: data.deepLink.present ? data.deepLink.value : this.deepLink,
+      remoteProgress: data.remoteProgress.present
+          ? data.remoteProgress.value
+          : this.remoteProgress,
+      remoteReadSeconds: data.remoteReadSeconds.present
+          ? data.remoteReadSeconds.value
+          : this.remoteReadSeconds,
+      remoteFinished: data.remoteFinished.present
+          ? data.remoteFinished.value
+          : this.remoteFinished,
+      remoteUpdatedAt: data.remoteUpdatedAt.present
+          ? data.remoteUpdatedAt.value
+          : this.remoteUpdatedAt,
+      lastSyncedAt: data.lastSyncedAt.present
+          ? data.lastSyncedAt.value
+          : this.lastSyncedAt,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WereadLink(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('wereadBookId: $wereadBookId, ')
+          ..write('readerLink: $readerLink, ')
+          ..write('deepLink: $deepLink, ')
+          ..write('remoteProgress: $remoteProgress, ')
+          ..write('remoteReadSeconds: $remoteReadSeconds, ')
+          ..write('remoteFinished: $remoteFinished, ')
+          ..write('remoteUpdatedAt: $remoteUpdatedAt, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    id,
+    bookId,
+    wereadBookId,
+    readerLink,
+    deepLink,
+    remoteProgress,
+    remoteReadSeconds,
+    remoteFinished,
+    remoteUpdatedAt,
+    lastSyncedAt,
+    createdAt,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is WereadLink &&
+          other.id == this.id &&
+          other.bookId == this.bookId &&
+          other.wereadBookId == this.wereadBookId &&
+          other.readerLink == this.readerLink &&
+          other.deepLink == this.deepLink &&
+          other.remoteProgress == this.remoteProgress &&
+          other.remoteReadSeconds == this.remoteReadSeconds &&
+          other.remoteFinished == this.remoteFinished &&
+          other.remoteUpdatedAt == this.remoteUpdatedAt &&
+          other.lastSyncedAt == this.lastSyncedAt &&
+          other.createdAt == this.createdAt);
+}
+
+class WereadLinksCompanion extends UpdateCompanion<WereadLink> {
+  final Value<int> id;
+  final Value<int> bookId;
+  final Value<String> wereadBookId;
+  final Value<String?> readerLink;
+  final Value<String?> deepLink;
+  final Value<int> remoteProgress;
+  final Value<int?> remoteReadSeconds;
+  final Value<bool> remoteFinished;
+  final Value<DateTime?> remoteUpdatedAt;
+  final Value<DateTime?> lastSyncedAt;
+  final Value<DateTime> createdAt;
+  const WereadLinksCompanion({
+    this.id = const Value.absent(),
+    this.bookId = const Value.absent(),
+    this.wereadBookId = const Value.absent(),
+    this.readerLink = const Value.absent(),
+    this.deepLink = const Value.absent(),
+    this.remoteProgress = const Value.absent(),
+    this.remoteReadSeconds = const Value.absent(),
+    this.remoteFinished = const Value.absent(),
+    this.remoteUpdatedAt = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  });
+  WereadLinksCompanion.insert({
+    this.id = const Value.absent(),
+    required int bookId,
+    required String wereadBookId,
+    this.readerLink = const Value.absent(),
+    this.deepLink = const Value.absent(),
+    this.remoteProgress = const Value.absent(),
+    this.remoteReadSeconds = const Value.absent(),
+    this.remoteFinished = const Value.absent(),
+    this.remoteUpdatedAt = const Value.absent(),
+    this.lastSyncedAt = const Value.absent(),
+    this.createdAt = const Value.absent(),
+  }) : bookId = Value(bookId),
+       wereadBookId = Value(wereadBookId);
+  static Insertable<WereadLink> custom({
+    Expression<int>? id,
+    Expression<int>? bookId,
+    Expression<String>? wereadBookId,
+    Expression<String>? readerLink,
+    Expression<String>? deepLink,
+    Expression<int>? remoteProgress,
+    Expression<int>? remoteReadSeconds,
+    Expression<bool>? remoteFinished,
+    Expression<DateTime>? remoteUpdatedAt,
+    Expression<DateTime>? lastSyncedAt,
+    Expression<DateTime>? createdAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bookId != null) 'book_id': bookId,
+      if (wereadBookId != null) 'weread_book_id': wereadBookId,
+      if (readerLink != null) 'reader_link': readerLink,
+      if (deepLink != null) 'deep_link': deepLink,
+      if (remoteProgress != null) 'remote_progress': remoteProgress,
+      if (remoteReadSeconds != null) 'remote_read_seconds': remoteReadSeconds,
+      if (remoteFinished != null) 'remote_finished': remoteFinished,
+      if (remoteUpdatedAt != null) 'remote_updated_at': remoteUpdatedAt,
+      if (lastSyncedAt != null) 'last_synced_at': lastSyncedAt,
+      if (createdAt != null) 'created_at': createdAt,
+    });
+  }
+
+  WereadLinksCompanion copyWith({
+    Value<int>? id,
+    Value<int>? bookId,
+    Value<String>? wereadBookId,
+    Value<String?>? readerLink,
+    Value<String?>? deepLink,
+    Value<int>? remoteProgress,
+    Value<int?>? remoteReadSeconds,
+    Value<bool>? remoteFinished,
+    Value<DateTime?>? remoteUpdatedAt,
+    Value<DateTime?>? lastSyncedAt,
+    Value<DateTime>? createdAt,
+  }) {
+    return WereadLinksCompanion(
+      id: id ?? this.id,
+      bookId: bookId ?? this.bookId,
+      wereadBookId: wereadBookId ?? this.wereadBookId,
+      readerLink: readerLink ?? this.readerLink,
+      deepLink: deepLink ?? this.deepLink,
+      remoteProgress: remoteProgress ?? this.remoteProgress,
+      remoteReadSeconds: remoteReadSeconds ?? this.remoteReadSeconds,
+      remoteFinished: remoteFinished ?? this.remoteFinished,
+      remoteUpdatedAt: remoteUpdatedAt ?? this.remoteUpdatedAt,
+      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bookId.present) {
+      map['book_id'] = Variable<int>(bookId.value);
+    }
+    if (wereadBookId.present) {
+      map['weread_book_id'] = Variable<String>(wereadBookId.value);
+    }
+    if (readerLink.present) {
+      map['reader_link'] = Variable<String>(readerLink.value);
+    }
+    if (deepLink.present) {
+      map['deep_link'] = Variable<String>(deepLink.value);
+    }
+    if (remoteProgress.present) {
+      map['remote_progress'] = Variable<int>(remoteProgress.value);
+    }
+    if (remoteReadSeconds.present) {
+      map['remote_read_seconds'] = Variable<int>(remoteReadSeconds.value);
+    }
+    if (remoteFinished.present) {
+      map['remote_finished'] = Variable<bool>(remoteFinished.value);
+    }
+    if (remoteUpdatedAt.present) {
+      map['remote_updated_at'] = Variable<DateTime>(remoteUpdatedAt.value);
+    }
+    if (lastSyncedAt.present) {
+      map['last_synced_at'] = Variable<DateTime>(lastSyncedAt.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('WereadLinksCompanion(')
+          ..write('id: $id, ')
+          ..write('bookId: $bookId, ')
+          ..write('wereadBookId: $wereadBookId, ')
+          ..write('readerLink: $readerLink, ')
+          ..write('deepLink: $deepLink, ')
+          ..write('remoteProgress: $remoteProgress, ')
+          ..write('remoteReadSeconds: $remoteReadSeconds, ')
+          ..write('remoteFinished: $remoteFinished, ')
+          ..write('remoteUpdatedAt: $remoteUpdatedAt, ')
+          ..write('lastSyncedAt: $lastSyncedAt, ')
+          ..write('createdAt: $createdAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
 class $PlansTable extends Plans with TableInfo<$PlansTable, Plan> {
   @override
   final GeneratedDatabase attachedDatabase;
@@ -4719,6 +5410,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $BooksTable books = $BooksTable(this);
+  late final $WereadLinksTable wereadLinks = $WereadLinksTable(this);
   late final $PlansTable plans = $PlansTable(this);
   late final $TasksTable tasks = $TasksTable(this);
   late final $ReadingSessionsTable readingSessions = $ReadingSessionsTable(
@@ -4733,6 +5425,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     books,
+    wereadLinks,
     plans,
     tasks,
     readingSessions,
@@ -4742,6 +5435,13 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   ];
   @override
   StreamQueryUpdateRules get streamUpdateRules => const StreamQueryUpdateRules([
+    WritePropagation(
+      on: TableUpdateQuery.onTableName(
+        'books',
+        limitUpdateKind: UpdateKind.delete,
+      ),
+      result: [TableUpdate('weread_links', kind: UpdateKind.delete)],
+    ),
     WritePropagation(
       on: TableUpdateQuery.onTableName(
         'books',
@@ -4845,6 +5545,24 @@ typedef $$BooksTableUpdateCompanionBuilder =
 final class $$BooksTableReferences
     extends BaseReferences<_$AppDatabase, $BooksTable, Book> {
   $$BooksTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static MultiTypedResultKey<$WereadLinksTable, List<WereadLink>>
+  _wereadLinksRefsTable(_$AppDatabase db) => MultiTypedResultKey.fromTable(
+    db.wereadLinks,
+    aliasName: $_aliasNameGenerator(db.books.id, db.wereadLinks.bookId),
+  );
+
+  $$WereadLinksTableProcessedTableManager get wereadLinksRefs {
+    final manager = $$WereadLinksTableTableManager(
+      $_db,
+      $_db.wereadLinks,
+    ).filter((f) => f.bookId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_wereadLinksRefsTable($_db));
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: cache),
+    );
+  }
 
   static MultiTypedResultKey<$PlansTable, List<Plan>> _plansRefsTable(
     _$AppDatabase db,
@@ -5051,6 +5769,31 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
     column: $table.createdAt,
     builder: (column) => ColumnFilters(column),
   );
+
+  Expression<bool> wereadLinksRefs(
+    Expression<bool> Function($$WereadLinksTableFilterComposer f) f,
+  ) {
+    final $$WereadLinksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.wereadLinks,
+      getReferencedColumn: (t) => t.bookId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WereadLinksTableFilterComposer(
+            $db: $db,
+            $table: $db.wereadLinks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
 
   Expression<bool> plansRefs(
     Expression<bool> Function($$PlansTableFilterComposer f) f,
@@ -5384,6 +6127,31 @@ class $$BooksTableAnnotationComposer
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
+  Expression<T> wereadLinksRefs<T extends Object>(
+    Expression<T> Function($$WereadLinksTableAnnotationComposer a) f,
+  ) {
+    final $$WereadLinksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.id,
+      referencedTable: $db.wereadLinks,
+      getReferencedColumn: (t) => t.bookId,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$WereadLinksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.wereadLinks,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return f(composer);
+  }
+
   Expression<T> plansRefs<T extends Object>(
     Expression<T> Function($$PlansTableAnnotationComposer a) f,
   ) {
@@ -5499,6 +6267,7 @@ class $$BooksTableTableManager
           (Book, $$BooksTableReferences),
           Book,
           PrefetchHooks Function({
+            bool wereadLinksRefs,
             bool plansRefs,
             bool tasksRefs,
             bool readingSessionsRefs,
@@ -5628,6 +6397,7 @@ class $$BooksTableTableManager
               .toList(),
           prefetchHooksCallback:
               ({
+                wereadLinksRefs = false,
                 plansRefs = false,
                 tasksRefs = false,
                 readingSessionsRefs = false,
@@ -5636,6 +6406,7 @@ class $$BooksTableTableManager
                 return PrefetchHooks(
                   db: db,
                   explicitlyWatchedTables: [
+                    if (wereadLinksRefs) db.wereadLinks,
                     if (plansRefs) db.plans,
                     if (tasksRefs) db.tasks,
                     if (readingSessionsRefs) db.readingSessions,
@@ -5644,6 +6415,27 @@ class $$BooksTableTableManager
                   addJoins: null,
                   getPrefetchedDataCallback: (items) async {
                     return [
+                      if (wereadLinksRefs)
+                        await $_getPrefetchedData<
+                          Book,
+                          $BooksTable,
+                          WereadLink
+                        >(
+                          currentTable: table,
+                          referencedTable: $$BooksTableReferences
+                              ._wereadLinksRefsTable(db),
+                          managerFromTypedResult: (p0) =>
+                              $$BooksTableReferences(
+                                db,
+                                table,
+                                p0,
+                              ).wereadLinksRefs,
+                          referencedItemsForCurrentItem:
+                              (item, referencedItems) => referencedItems.where(
+                                (e) => e.bookId == item.id,
+                              ),
+                          typedResults: items,
+                        ),
                       if (plansRefs)
                         await $_getPrefetchedData<Book, $BooksTable, Plan>(
                           currentTable: table,
@@ -5729,11 +6521,452 @@ typedef $$BooksTableProcessedTableManager =
       (Book, $$BooksTableReferences),
       Book,
       PrefetchHooks Function({
+        bool wereadLinksRefs,
         bool plansRefs,
         bool tasksRefs,
         bool readingSessionsRefs,
         bool readingsRefs,
       })
+    >;
+typedef $$WereadLinksTableCreateCompanionBuilder =
+    WereadLinksCompanion Function({
+      Value<int> id,
+      required int bookId,
+      required String wereadBookId,
+      Value<String?> readerLink,
+      Value<String?> deepLink,
+      Value<int> remoteProgress,
+      Value<int?> remoteReadSeconds,
+      Value<bool> remoteFinished,
+      Value<DateTime?> remoteUpdatedAt,
+      Value<DateTime?> lastSyncedAt,
+      Value<DateTime> createdAt,
+    });
+typedef $$WereadLinksTableUpdateCompanionBuilder =
+    WereadLinksCompanion Function({
+      Value<int> id,
+      Value<int> bookId,
+      Value<String> wereadBookId,
+      Value<String?> readerLink,
+      Value<String?> deepLink,
+      Value<int> remoteProgress,
+      Value<int?> remoteReadSeconds,
+      Value<bool> remoteFinished,
+      Value<DateTime?> remoteUpdatedAt,
+      Value<DateTime?> lastSyncedAt,
+      Value<DateTime> createdAt,
+    });
+
+final class $$WereadLinksTableReferences
+    extends BaseReferences<_$AppDatabase, $WereadLinksTable, WereadLink> {
+  $$WereadLinksTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $BooksTable _bookIdTable(_$AppDatabase db) => db.books.createAlias(
+    $_aliasNameGenerator(db.wereadLinks.bookId, db.books.id),
+  );
+
+  $$BooksTableProcessedTableManager get bookId {
+    final $_column = $_itemColumn<int>('book_id')!;
+
+    final manager = $$BooksTableTableManager(
+      $_db,
+      $_db.books,
+    ).filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_bookIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+      manager.$state.copyWith(prefetchedData: [item]),
+    );
+  }
+}
+
+class $$WereadLinksTableFilterComposer
+    extends Composer<_$AppDatabase, $WereadLinksTable> {
+  $$WereadLinksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get wereadBookId => $composableBuilder(
+    column: $table.wereadBookId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get readerLink => $composableBuilder(
+    column: $table.readerLink,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get deepLink => $composableBuilder(
+    column: $table.deepLink,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get remoteProgress => $composableBuilder(
+    column: $table.remoteProgress,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get remoteReadSeconds => $composableBuilder(
+    column: $table.remoteReadSeconds,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get remoteFinished => $composableBuilder(
+    column: $table.remoteFinished,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get remoteUpdatedAt => $composableBuilder(
+    column: $table.remoteUpdatedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  $$BooksTableFilterComposer get bookId {
+    final $$BooksTableFilterComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bookId,
+      referencedTable: $db.books,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BooksTableFilterComposer(
+            $db: $db,
+            $table: $db.books,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WereadLinksTableOrderingComposer
+    extends Composer<_$AppDatabase, $WereadLinksTable> {
+  $$WereadLinksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get wereadBookId => $composableBuilder(
+    column: $table.wereadBookId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get readerLink => $composableBuilder(
+    column: $table.readerLink,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get deepLink => $composableBuilder(
+    column: $table.deepLink,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get remoteProgress => $composableBuilder(
+    column: $table.remoteProgress,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get remoteReadSeconds => $composableBuilder(
+    column: $table.remoteReadSeconds,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get remoteFinished => $composableBuilder(
+    column: $table.remoteFinished,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get remoteUpdatedAt => $composableBuilder(
+    column: $table.remoteUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+    column: $table.createdAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  $$BooksTableOrderingComposer get bookId {
+    final $$BooksTableOrderingComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bookId,
+      referencedTable: $db.books,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BooksTableOrderingComposer(
+            $db: $db,
+            $table: $db.books,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WereadLinksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $WereadLinksTable> {
+  $$WereadLinksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get wereadBookId => $composableBuilder(
+    column: $table.wereadBookId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get readerLink => $composableBuilder(
+    column: $table.readerLink,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get deepLink =>
+      $composableBuilder(column: $table.deepLink, builder: (column) => column);
+
+  GeneratedColumn<int> get remoteProgress => $composableBuilder(
+    column: $table.remoteProgress,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get remoteReadSeconds => $composableBuilder(
+    column: $table.remoteReadSeconds,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get remoteFinished => $composableBuilder(
+    column: $table.remoteFinished,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get remoteUpdatedAt => $composableBuilder(
+    column: $table.remoteUpdatedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get lastSyncedAt => $composableBuilder(
+    column: $table.lastSyncedAt,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  $$BooksTableAnnotationComposer get bookId {
+    final $$BooksTableAnnotationComposer composer = $composerBuilder(
+      composer: this,
+      getCurrentColumn: (t) => t.bookId,
+      referencedTable: $db.books,
+      getReferencedColumn: (t) => t.id,
+      builder:
+          (
+            joinBuilder, {
+            $addJoinBuilderToRootComposer,
+            $removeJoinBuilderFromRootComposer,
+          }) => $$BooksTableAnnotationComposer(
+            $db: $db,
+            $table: $db.books,
+            $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+            joinBuilder: joinBuilder,
+            $removeJoinBuilderFromRootComposer:
+                $removeJoinBuilderFromRootComposer,
+          ),
+    );
+    return composer;
+  }
+}
+
+class $$WereadLinksTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $WereadLinksTable,
+          WereadLink,
+          $$WereadLinksTableFilterComposer,
+          $$WereadLinksTableOrderingComposer,
+          $$WereadLinksTableAnnotationComposer,
+          $$WereadLinksTableCreateCompanionBuilder,
+          $$WereadLinksTableUpdateCompanionBuilder,
+          (WereadLink, $$WereadLinksTableReferences),
+          WereadLink,
+          PrefetchHooks Function({bool bookId})
+        > {
+  $$WereadLinksTableTableManager(_$AppDatabase db, $WereadLinksTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$WereadLinksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$WereadLinksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$WereadLinksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<int> bookId = const Value.absent(),
+                Value<String> wereadBookId = const Value.absent(),
+                Value<String?> readerLink = const Value.absent(),
+                Value<String?> deepLink = const Value.absent(),
+                Value<int> remoteProgress = const Value.absent(),
+                Value<int?> remoteReadSeconds = const Value.absent(),
+                Value<bool> remoteFinished = const Value.absent(),
+                Value<DateTime?> remoteUpdatedAt = const Value.absent(),
+                Value<DateTime?> lastSyncedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => WereadLinksCompanion(
+                id: id,
+                bookId: bookId,
+                wereadBookId: wereadBookId,
+                readerLink: readerLink,
+                deepLink: deepLink,
+                remoteProgress: remoteProgress,
+                remoteReadSeconds: remoteReadSeconds,
+                remoteFinished: remoteFinished,
+                remoteUpdatedAt: remoteUpdatedAt,
+                lastSyncedAt: lastSyncedAt,
+                createdAt: createdAt,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required int bookId,
+                required String wereadBookId,
+                Value<String?> readerLink = const Value.absent(),
+                Value<String?> deepLink = const Value.absent(),
+                Value<int> remoteProgress = const Value.absent(),
+                Value<int?> remoteReadSeconds = const Value.absent(),
+                Value<bool> remoteFinished = const Value.absent(),
+                Value<DateTime?> remoteUpdatedAt = const Value.absent(),
+                Value<DateTime?> lastSyncedAt = const Value.absent(),
+                Value<DateTime> createdAt = const Value.absent(),
+              }) => WereadLinksCompanion.insert(
+                id: id,
+                bookId: bookId,
+                wereadBookId: wereadBookId,
+                readerLink: readerLink,
+                deepLink: deepLink,
+                remoteProgress: remoteProgress,
+                remoteReadSeconds: remoteReadSeconds,
+                remoteFinished: remoteFinished,
+                remoteUpdatedAt: remoteUpdatedAt,
+                lastSyncedAt: lastSyncedAt,
+                createdAt: createdAt,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable(table),
+                  $$WereadLinksTableReferences(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: ({bookId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins:
+                  <
+                    T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic
+                    >
+                  >(state) {
+                    if (bookId) {
+                      state =
+                          state.withJoin(
+                                currentTable: table,
+                                currentColumn: table.bookId,
+                                referencedTable: $$WereadLinksTableReferences
+                                    ._bookIdTable(db),
+                                referencedColumn: $$WereadLinksTableReferences
+                                    ._bookIdTable(db)
+                                    .id,
+                              )
+                              as T;
+                    }
+
+                    return state;
+                  },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ),
+      );
+}
+
+typedef $$WereadLinksTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $WereadLinksTable,
+      WereadLink,
+      $$WereadLinksTableFilterComposer,
+      $$WereadLinksTableOrderingComposer,
+      $$WereadLinksTableAnnotationComposer,
+      $$WereadLinksTableCreateCompanionBuilder,
+      $$WereadLinksTableUpdateCompanionBuilder,
+      (WereadLink, $$WereadLinksTableReferences),
+      WereadLink,
+      PrefetchHooks Function({bool bookId})
     >;
 typedef $$PlansTableCreateCompanionBuilder =
     PlansCompanion Function({
@@ -8234,6 +9467,8 @@ class $AppDatabaseManager {
   $AppDatabaseManager(this._db);
   $$BooksTableTableManager get books =>
       $$BooksTableTableManager(_db, _db.books);
+  $$WereadLinksTableTableManager get wereadLinks =>
+      $$WereadLinksTableTableManager(_db, _db.wereadLinks);
   $$PlansTableTableManager get plans =>
       $$PlansTableTableManager(_db, _db.plans);
   $$TasksTableTableManager get tasks =>

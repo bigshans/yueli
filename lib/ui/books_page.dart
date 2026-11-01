@@ -8,6 +8,7 @@ import '../data/repository.dart';
 import '../state/providers.dart';
 import 'book_detail_page.dart';
 import 'book_form_page.dart';
+import 'weread_import_page.dart';
 import 'widgets/book_cover.dart';
 import 'widgets/tag_picker_sheet.dart';
 
@@ -63,6 +64,10 @@ class _BooksPageState extends ConsumerState<BooksPage>
       allTags: allTags,
       selected: _selectedTags,
       title: '筛选标签',
+      onDeleteTag: (tag) async {
+        await ref.read(repositoryProvider).deleteTagGlobally(tag);
+        if (mounted) setState(() => _selectedTags.remove(tag));
+      },
     );
     if (picked != null && mounted) {
       setState(() {
@@ -99,6 +104,22 @@ class _BooksPageState extends ConsumerState<BooksPage>
     return Scaffold(
       appBar: AppBar(
         title: const Text('书架'),
+        actions: [
+          IconButton(
+            tooltip: '从微信读书导入',
+            icon: const Icon(Icons.cloud_download_outlined),
+            onPressed: () async {
+              final imported = await Navigator.of(context).push<bool>(
+                MaterialPageRoute(builder: (_) => const WereadImportPage()),
+              );
+              if (imported == true && context.mounted) {
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('已从微信读书导入书籍')));
+              }
+            },
+          ),
+        ],
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,

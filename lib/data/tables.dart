@@ -62,6 +62,29 @@ class Books extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
+/// 本地书籍与微信读书书籍的关联。
+class WereadLinks extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get bookId =>
+      integer().references(Books, #id, onDelete: KeyAction.cascade).unique()();
+  TextColumn get wereadBookId => text().unique()();
+
+  TextColumn get readerLink => text().nullable()();
+  TextColumn get deepLink => text().nullable()();
+
+  /// 微信读书阅读进度百分比，0-100。
+  IntColumn get remoteProgress => integer().withDefault(const Constant(0))();
+
+  /// 微信读书累计阅读时长（秒）。
+  IntColumn get remoteReadSeconds => integer().nullable()();
+  BoolColumn get remoteFinished =>
+      boolean().withDefault(const Constant(false))();
+
+  DateTimeColumn get remoteUpdatedAt => dateTime().nullable()();
+  DateTimeColumn get lastSyncedAt => dateTime().nullable()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
 /// 阅读排期计划：把一本书在时间上摊开。
 class Plans extends Table {
   IntColumn get id => integer().autoIncrement()();

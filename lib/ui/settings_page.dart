@@ -8,7 +8,9 @@ import '../core/date_x.dart';
 import '../data/backup.dart';
 import '../data/repository.dart';
 import '../services/target_app_service.dart';
+import '../services/weread/weread_client.dart';
 import '../state/providers.dart';
+import 'weread_import_page.dart';
 import 'widgets/slider_field.dart';
 import 'widgets/timer_banner.dart';
 
@@ -26,10 +28,19 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   Set<int> _weekdays = {1, 2, 3, 4, 5, 6, 7};
   int _settlementMinutes = 0;
   bool _seeded = false;
+  final _wereadKey = TextEditingController();
+  bool _wereadKeyVisible = false;
+  bool _wereadBusy = false;
+  bool _wereadAutoBindBusy = false;
+  bool _wereadSyncBusy = false;
+  bool _hasWereadKey = false;
+  String? _wereadStatus;
+  bool _wereadStatusOk = false;
 
   @override
   void initState() {
     super.initState();
+    _loadWereadKey();
     ref.listenManual(settingsProvider, (_, next) {
       final s = next.valueOrNull;
       if (s == null || _seeded || !mounted) return;
@@ -48,7 +59,226 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
   void dispose() {
     _pace.dispose();
     _minutes.dispose();
+    _wereadKey.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadWereadKey() async {
+    try {
+      final key = await ref.read(wereadCredentialsProvider).readApiKey();
+      if (!mounted) return;
+      setState(() {
+        _wereadKey.text = key ?? '';
+        _hasWereadKey = key != null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = '读取安全存储失败：$e';
+        _wereadStatusOk = false;
+      });
+    }
+  }
+
+  Future<void> _saveWereadKey() async {
+    final key = _wereadKey.text.trim();
+    if (key.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('请先填写微信读书 API Key')));
+      return;
+    }
+    setState(() {
+      _wereadBusy = true;
+      _wereadStatus = null;
+    });
+    try {
+      final summary = await ref.read(wereadClientProvider).validateApiKey(key);
+      await ref.read(wereadCredentialsProvider).saveApiKey(key);
+      if (!mounted) return;
+      setState(() {
+        _hasWereadKey = true;
+        _wereadStatus =
+            '已连接 · 书架 ${summary.totalCount} 个条目'
+            '（电子书 ${summary.bookCount}，有声书 ${summary.albumCount}'
+            '${summary.hasMp ? '，文章收藏 1' : ''}）';
+        _wereadStatusOk = true;
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('微信读书连接成功')));
+    } on WereadException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = e.message;
+        _wereadStatusOk = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = '验证失败：$e';
+        _wereadStatusOk = false;
+      });
+    } finally {
+      if (mounted) setState(() => _wereadBusy = false);
+    }
+  }
+
+  Future<void> _autoBindWeread() async {
+    setState(() {
+      _wereadAutoBindBusy = true;
+      _wereadStatus = '正在扫描同名书籍…';
+      _wereadStatusOk = true;
+    });
+    try {
+      final result = await ref
+          .read(wereadImportServiceProvider)
+          .autoBindExistingBooks(
+            onProgress: (done, total) {
+              if (!mounted) return;
+              setState(() {
+                _wereadStatus = total == 0
+                    ? '正在扫描同名书籍…'
+                    : '正在自动绑定 $done / $total…';
+              });
+            },
+          );
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = result.bound > 0
+            ? '已自动绑定 ${result.bound} 本'
+            : '没有找到可自动绑定的同名书籍';
+        _wereadStatusOk = result.bound > 0;
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('自动绑定完成'),
+          content: Text(
+            [
+              if (result.bound > 0) '已绑定 ${result.bound} 本。',
+              if (result.ambiguous > 0) '${result.ambiguous} 本同名但无法唯一确定，已跳过。',
+              if (result.failed > 0) '${result.failed} 本绑定失败：',
+              if (result.failed > 0) ...result.errors.take(5),
+              if (result.bound == 0 &&
+                  result.ambiguous == 0 &&
+                  result.failed == 0)
+                '没有找到书名和作者都匹配的微信读书书籍。',
+            ].join('\n'),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('好'),
+            ),
+          ],
+        ),
+      );
+    } on WereadException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = e.message;
+        _wereadStatusOk = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = '自动绑定失败：$e';
+        _wereadStatusOk = false;
+      });
+    } finally {
+      if (mounted) setState(() => _wereadAutoBindBusy = false);
+    }
+  }
+
+  Future<void> _syncWereadAll() async {
+    setState(() {
+      _wereadSyncBusy = true;
+      _wereadStatus = '正在同步微信读书进度…';
+      _wereadStatusOk = true;
+    });
+    try {
+      final result = await ref
+          .read(wereadSyncServiceProvider)
+          .syncAll(
+            onProgress: (done, total) {
+              if (!mounted) return;
+              setState(() {
+                _wereadStatus = total == 0
+                    ? '没有已绑定的微信读书书籍'
+                    : '正在同步 $done / $total…';
+              });
+            },
+          );
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = result.changed > 0
+            ? '已同步 ${result.changed} 本'
+            : '已检查 ${result.kept} 本，进度无需更新';
+        _wereadStatusOk = result.failed == 0;
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('同步完成'),
+          content: Text(
+            [
+              if (result.changed > 0) '更新 ${result.changed} 本。',
+              if (result.finished > 0) '其中 ${result.finished} 本同步为读完。',
+              if (result.kept > 0) '${result.kept} 本无需更新。',
+              if (result.failed > 0) '${result.failed} 本同步失败：',
+              if (result.failed > 0) ...result.errors.take(5),
+              if (result.changed == 0 && result.kept == 0 && result.failed == 0)
+                '还没有绑定任何微信读书书籍。',
+              if (result.kept > 0 || result.changed > 0)
+                '\n同步只记录微信读书百分比和读完状态，不会自动按比例修改本地页码。',
+            ].join('\n'),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('好'),
+            ),
+          ],
+        ),
+      );
+    } on WereadException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = e.message;
+        _wereadStatusOk = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = '同步失败：$e';
+        _wereadStatusOk = false;
+      });
+    } finally {
+      if (mounted) setState(() => _wereadSyncBusy = false);
+    }
+  }
+
+  Future<void> _clearWereadKey() async {
+    setState(() => _wereadBusy = true);
+    try {
+      await ref.read(wereadCredentialsProvider).clearApiKey();
+      if (!mounted) return;
+      setState(() {
+        _wereadKey.clear();
+        _hasWereadKey = false;
+        _wereadStatus = '已清除微信读书授权';
+        _wereadStatusOk = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _wereadStatus = '清除失败：$e';
+        _wereadStatusOk = false;
+      });
+    } finally {
+      if (mounted) setState(() => _wereadBusy = false);
+    }
   }
 
   Future<void> _pickTargetApp() async {
@@ -360,6 +590,151 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 label: const Text('选择应用'),
               ),
             ),
+          const SizedBox(height: 32),
+          Text(
+            '微信读书',
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '通过微信读书官方 Agent API Gateway 连接账号，用于导入书架和同步阅读进度。'
+            'API Key 只保存在本机安全存储中，不写入备份。',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _wereadKey,
+            obscureText: !_wereadKeyVisible,
+            autocorrect: false,
+            enableSuggestions: false,
+            decoration: InputDecoration(
+              labelText: 'API Key',
+              hintText: 'wrk-...',
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                tooltip: _wereadKeyVisible ? '隐藏' : '显示',
+                onPressed: () =>
+                    setState(() => _wereadKeyVisible = !_wereadKeyVisible),
+                icon: Icon(
+                  _wereadKeyVisible
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              FilledButton.icon(
+                onPressed: _wereadBusy ? null : _saveWereadKey,
+                icon: _wereadBusy
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.link),
+                label: Text(_wereadBusy ? '验证中…' : '保存并验证'),
+              ),
+              if (_hasWereadKey)
+                OutlinedButton.icon(
+                  onPressed: _wereadBusy ? null : _clearWereadKey,
+                  icon: const Icon(Icons.link_off),
+                  label: const Text('清除授权'),
+                ),
+            ],
+          ),
+          if (_wereadStatus != null) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  _wereadStatusOk
+                      ? Icons.check_circle_outline
+                      : Icons.info_outline,
+                  size: 18,
+                  color: _wereadStatusOk
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    _wereadStatus!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: _wereadStatusOk
+                          ? Theme.of(context).colorScheme.primary
+                          : Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 8),
+          SelectableText(
+            '获取 API Key：weread.qq.com/r/weread-skills',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (_hasWereadKey) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed:
+                      _wereadBusy || _wereadAutoBindBusy || _wereadSyncBusy
+                      ? null
+                      : _autoBindWeread,
+                  icon: _wereadAutoBindBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.auto_fix_high_outlined),
+                  label: Text(_wereadAutoBindBusy ? '自动绑定中…' : '自动绑定同名书籍'),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      _wereadBusy || _wereadAutoBindBusy || _wereadSyncBusy
+                      ? null
+                      : _syncWereadAll,
+                  icon: _wereadSyncBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.sync),
+                  label: Text(_wereadSyncBusy ? '同步中…' : '同步全部进度'),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      _wereadBusy || _wereadAutoBindBusy || _wereadSyncBusy
+                      ? null
+                      : () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const WereadImportPage(),
+                          ),
+                        ),
+                  icon: const Icon(Icons.cloud_download_outlined),
+                  label: const Text('从微信读书导入书籍'),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 32),
           Text(
             '数据备份',
