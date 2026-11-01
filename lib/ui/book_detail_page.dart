@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/date_x.dart';
+import '../core/format_x.dart';
 import '../data/book_status.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
@@ -10,6 +11,7 @@ import '../state/providers.dart';
 import 'book_form_page.dart';
 import 'plan_editor_page.dart';
 import 'stats_page.dart';
+import 'widgets/book_cover.dart';
 import 'widgets/task_card.dart';
 import 'widgets/timer_banner.dart';
 
@@ -89,6 +91,15 @@ class BookDetailPage extends ConsumerWidget {
                 label: Text(timingThis ? '结束计时' : '开始计时阅读'),
               ),
               const SizedBox(height: 16),
+              if (_BookInfoCard.hasContent(book)) ...[
+                _BookInfoCard(book: book),
+                const SizedBox(height: 16),
+              ],
+              if (book.description != null &&
+                  book.description!.trim().isNotEmpty) ...[
+                _DescriptionCard(text: book.description!.trim()),
+                const SizedBox(height: 16),
+              ],
               if (settings != null) ...[
                 _SectionCard(
                   title: '阅读统计',
@@ -187,69 +198,120 @@ class _Header extends StatelessWidget {
     final progress = book.totalPages == 0
         ? 0.0
         : book.currentPage / book.totalPages;
+    final tags = parseTags(book.tags);
+    final author = (book.author == null || book.author!.trim().isEmpty)
+        ? '未知作者'
+        : book.author!.trim();
+    final translator = book.translator?.trim();
+    final rating = formatRating(book.rating, book.ratingCount);
+    final wordCount = formatWordCount(book.wordCount);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          book.title,
-          style: theme.textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        if (book.author != null && book.author!.isNotEmpty) ...[
-          const SizedBox(height: 4),
-          Text(
-            book.author!,
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-        if (parseTags(book.tags).isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 4,
-            children: [
-              for (final t in parseTags(book.tags))
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '#$t',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: theme.colorScheme.onSecondaryContainer,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            BookCover(book: book, width: 88, height: 124, borderRadius: 10),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    book.title,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                ),
-            ],
-          ),
-        ],
-        if (book.status != BookStatus.reading) ...[
-          const SizedBox(height: 10),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.tertiaryContainer,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Text(
-              BookStatus.label(book.status),
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: theme.colorScheme.onTertiaryContainer,
+                  const SizedBox(height: 4),
+                  Text(
+                    translator == null || translator.isEmpty
+                        ? author
+                        : '$author · 译者 $translator',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (rating.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.star_rounded,
+                          size: 17,
+                          color: theme.colorScheme.tertiary,
+                        ),
+                        const SizedBox(width: 3),
+                        Text(rating, style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ],
+                  if (wordCount.isNotEmpty || book.totalPages > 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      [
+                        if (wordCount.isNotEmpty) wordCount,
+                        if (book.totalPages > 0) '${book.totalPages} 页',
+                      ].join(' · '),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  if (tags.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        for (final t in tags)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.secondaryContainer,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '#$t',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: theme.colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (book.status != BookStatus.reading) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.tertiaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        BookStatus.label(book.status),
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onTertiaryContainer,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
         const SizedBox(height: 16),
         ClipRRect(
           borderRadius: BorderRadius.circular(6),
@@ -262,10 +324,114 @@ class _Header extends StatelessWidget {
         const SizedBox(height: 8),
         Text(
           '已读 ${book.currentPage} / ${book.totalPages} 页 '
-          '(${(progress * 100).toStringAsFixed(0)}%)',
+          '(${(progress * 100).toStringAsFixed(0)}%) · '
+          '剩余 ${book.totalPages - book.currentPage} 页',
           style: theme.textTheme.bodySmall,
         ),
       ],
+    );
+  }
+}
+
+class _BookInfoCard extends StatelessWidget {
+  const _BookInfoCard({required this.book});
+  final Book book;
+
+  static bool hasContent(Book book) =>
+      _nonEmpty(book.publisher) ||
+      _nonEmpty(book.publishDate) ||
+      _nonEmpty(book.isbn) ||
+      book.wordCount != null ||
+      book.metadataSource != 'manual';
+
+  static bool _nonEmpty(String? value) =>
+      value != null && value.trim().isNotEmpty;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = <(String, String)>[
+      if (_nonEmpty(book.publisher)) ('出版社', book.publisher!.trim()),
+      if (_nonEmpty(book.publishDate)) ('出版时间', book.publishDate!.trim()),
+      if (_nonEmpty(book.isbn)) ('ISBN', book.isbn!.trim()),
+      if (book.wordCount != null) ('字数', formatWordCount(book.wordCount)),
+      if (book.metadataSource != 'manual')
+        (
+          '数据来源',
+          switch (book.metadataSource) {
+            'weread' => '微信读书',
+            'import' => '导入',
+            _ => book.metadataSource,
+          },
+        ),
+    ];
+    return _SectionCard(
+      title: '书籍信息',
+      child: Column(
+        children: [
+          for (var i = 0; i < rows.length; i++) ...[
+            if (i > 0) const Divider(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 72,
+                  child: Text(
+                    rows[i].$1,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    rows[i].$2,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DescriptionCard extends StatefulWidget {
+  const _DescriptionCard({required this.text});
+  final String text;
+
+  @override
+  State<_DescriptionCard> createState() => _DescriptionCardState();
+}
+
+class _DescriptionCardState extends State<_DescriptionCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final canExpand = widget.text.length > 120 || widget.text.contains('\n');
+    return _SectionCard(
+      title: '简介',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.text,
+            maxLines: _expanded ? null : 3,
+            overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.6),
+          ),
+          if (canExpand) ...[
+            const SizedBox(height: 6),
+            TextButton(
+              onPressed: () => setState(() => _expanded = !_expanded),
+              child: Text(_expanded ? '收起' : '展开'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

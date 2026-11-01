@@ -29,6 +29,17 @@ void main() {
       totalPages: 120,
       tags: '小说,测试',
       manualPagesPerHour: 45,
+      coverUrl: 'https://example.com/cover.jpg',
+      coverPath: 'data:image/png;base64,AA==',
+      description: '这是一本用于测试备份的书。',
+      translator: '译者',
+      publisher: '测试出版社',
+      publishDate: '2024-05',
+      isbn: '9780000000000',
+      wordCount: 123456,
+      rating: 8.7,
+      ratingCount: 1234,
+      metadataSource: 'weread',
     );
     await repo.savePlan(
       bookId: id,
@@ -75,6 +86,17 @@ void main() {
     expect(books.single.status, BookStatus.reading);
     expect(books.single.manualPagesPerHour, 45);
     expect(books.single.currentPage, 18);
+    expect(books.single.coverUrl, 'https://example.com/cover.jpg');
+    expect(books.single.coverPath, 'data:image/png;base64,AA==');
+    expect(books.single.description, '这是一本用于测试备份的书。');
+    expect(books.single.translator, '译者');
+    expect(books.single.publisher, '测试出版社');
+    expect(books.single.publishDate, '2024-05');
+    expect(books.single.isbn, '9780000000000');
+    expect(books.single.wordCount, 123456);
+    expect(books.single.rating, 8.7);
+    expect(books.single.ratingCount, 1234);
+    expect(books.single.metadataSource, 'weread');
 
     final restoredPlan = await repo.getPlanForBook(id);
     expect(restoredPlan!.id, plan!.id);

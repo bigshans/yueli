@@ -258,6 +258,21 @@ class BackupService {
     'id': b.id,
     'title': b.title,
     'author': b.author,
+    'coverUrl': b.coverUrl,
+    // 本地上传封面通常依赖设备路径，不进入备份；Web 端 data URI 可以自包含。
+    'coverPath': b.coverPath?.startsWith('data:image') == true
+        ? b.coverPath
+        : null,
+    'description': b.description,
+    'translator': b.translator,
+    'publisher': b.publisher,
+    'publishDate': b.publishDate,
+    'isbn': b.isbn,
+    'wordCount': b.wordCount,
+    'rating': b.rating,
+    'ratingCount': b.ratingCount,
+    'metadataSource': b.metadataSource,
+    'metadataUpdatedAt': b.metadataUpdatedAt?.toIso8601String(),
     'totalPages': b.totalPages,
     'currentPage': b.currentPage,
     'priority': b.priority,
@@ -330,6 +345,18 @@ class BackupService {
     id: Value(_asInt(m['id'], 0)),
     title: Value(_asString(m['title'], '未命名读物')),
     author: Value(_asNullableString(m['author'])),
+    coverUrl: Value(_asNullableString(m['coverUrl'])),
+    coverPath: Value(_asNullableDataImage(m['coverPath'])),
+    description: Value(_asNullableString(m['description'])),
+    translator: Value(_asNullableString(m['translator'])),
+    publisher: Value(_asNullableString(m['publisher'])),
+    publishDate: Value(_asNullableString(m['publishDate'])),
+    isbn: Value(_asNullableString(m['isbn'])),
+    wordCount: Value(_asNullableInt(m['wordCount'])),
+    rating: Value(_asNullableDouble(m['rating'])),
+    ratingCount: Value(_asNullableInt(m['ratingCount'])),
+    metadataSource: Value(_asString(m['metadataSource'], 'manual')),
+    metadataUpdatedAt: Value(_asNullableDate(m['metadataUpdatedAt'])),
     totalPages: Value(_asInt(m['totalPages'], 0)),
     currentPage: Value(_asInt(m['currentPage'], 0)),
     priority: Value(_asInt(m['priority'], 2)),
@@ -461,6 +488,11 @@ class BackupService {
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value) ?? fallback;
     return fallback;
+  }
+
+  String? _asNullableDataImage(Object? value) {
+    if (value is String && value.startsWith('data:image')) return value;
+    return null;
   }
 
   int? _asNullableInt(Object? value) {

@@ -38,7 +38,7 @@ void main() {
         .customSelect('PRAGMA user_version')
         .getSingle()
         .then((r) => r.read<int>('user_version'));
-    expect(version, 13);
+    expect(version, 15);
 
     // 回填的轮次记录应存在。
     final rounds = await (db.select(
@@ -60,9 +60,9 @@ void main() {
     final id = await db
         .into(db.books)
         .insert(BooksCompanion.insert(title: '旧库', totalPages: 100));
-    // 模拟「schemaVersion 已经是 13，但 status 列还没加上」的状态。
+    // 模拟「schemaVersion 已经是 15，但 status 列还没加上」的状态。
     await db.customStatement('ALTER TABLE books DROP COLUMN status');
-    await db.customStatement('PRAGMA user_version = 13');
+    await db.customStatement('PRAGMA user_version = 15');
     await db.close();
 
     db = AppDatabase(NativeDatabase(file));
@@ -74,5 +74,35 @@ void main() {
     expect(book.status, BookStatus.reading);
     // 与 books 有关的 join 查询也应恢复正常。
     await db.select(db.tasks).get();
+  });
+  test('版本号已更新但新元数据列缺失时，打开数据库前自动补齐', () async {
+    final file = File(
+      '${Directory.systemTemp.path}/yueli_migration_metadata_'
+      '${DateTime.now().microsecondsSinceEpoch}.db',
+    );
+    addTearDown(() {
+      if (file.existsSync()) file.deleteSync();
+    });
+
+    var db = AppDatabase(NativeDatabase(file));
+    final id = await db
+        .into(db.books)
+        .insert(BooksCompanion.insert(title: '旧元数据书', totalPages: 100));
+    await db.customStatement('ALTER TABLE books DROP COLUMN cover_url');
+    await db.customStatement('ALTER TABLE books DROP COLUMN cover_path');
+    await db.customStatement('ALTER TABLE books DROP COLUMN metadata_source');
+    await db.customStatement('PRAGMA user_version = 15');
+    await db.close();
+
+    db = AppDatabase(NativeDatabase(file));
+    addTearDown(db.close);
+
+    final book = await (db.select(
+      db.books,
+    )..where((t) => t.id.equals(id))).getSingle();
+    expect(book.coverUrl, isNull);
+    expect(book.coverPath, isNull);
+    expect(book.metadataSource, 'manual');
+    expect(book.description, isNull);
   });
 }

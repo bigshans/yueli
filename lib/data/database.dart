@@ -22,7 +22,7 @@ class AppDatabase extends _$AppDatabase {
   static QueryExecutor _open() => driftDatabase(name: 'reader_management');
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -41,6 +41,18 @@ class AppDatabase extends _$AppDatabase {
       await _addColumnIfMissing(m, books, books.round);
       await _addColumnIfMissing(m, books, books.tags);
       await _addColumnIfMissing(m, books, books.status);
+      await _addColumnIfMissing(m, books, books.coverUrl);
+      await _addColumnIfMissing(m, books, books.coverPath);
+      await _addColumnIfMissing(m, books, books.description);
+      await _addColumnIfMissing(m, books, books.translator);
+      await _addColumnIfMissing(m, books, books.publisher);
+      await _addColumnIfMissing(m, books, books.publishDate);
+      await _addColumnIfMissing(m, books, books.isbn);
+      await _addColumnIfMissing(m, books, books.wordCount);
+      await _addColumnIfMissing(m, books, books.rating);
+      await _addColumnIfMissing(m, books, books.ratingCount);
+      await _addColumnIfMissing(m, books, books.metadataSource);
+      await _addColumnIfMissing(m, books, books.metadataUpdatedAt);
 
       // plans.deadline 早期为 NOT NULL，需要重建表改为可空。
       if (await _hasTable('plans') &&
@@ -124,6 +136,27 @@ class AppDatabase extends _$AppDatabase {
           "ALTER TABLE books ADD COLUMN status TEXT NOT NULL DEFAULT 'reading'",
         );
         await _backfillBookStatus();
+      }
+      const metadataColumns = <String, String>{
+        'cover_url': 'TEXT',
+        'cover_path': 'TEXT',
+        'description': 'TEXT',
+        'translator': 'TEXT',
+        'publisher': 'TEXT',
+        'publish_date': 'TEXT',
+        'isbn': 'TEXT',
+        'word_count': 'INTEGER',
+        'rating': 'REAL',
+        'rating_count': 'INTEGER',
+        'metadata_source': "TEXT NOT NULL DEFAULT 'manual'",
+        'metadata_updated_at': 'INTEGER',
+      };
+      for (final entry in metadataColumns.entries) {
+        if (!await _hasColumn('books', entry.key)) {
+          await customStatement(
+            'ALTER TABLE books ADD COLUMN ${entry.key} ${entry.value}',
+          );
+        }
       }
     }
     if (await _hasTable('app_settings') &&

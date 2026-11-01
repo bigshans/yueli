@@ -39,6 +39,136 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     type: DriftSqlType.string,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _coverUrlMeta = const VerificationMeta(
+    'coverUrl',
+  );
+  @override
+  late final GeneratedColumn<String> coverUrl = GeneratedColumn<String>(
+    'cover_url',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _coverPathMeta = const VerificationMeta(
+    'coverPath',
+  );
+  @override
+  late final GeneratedColumn<String> coverPath = GeneratedColumn<String>(
+    'cover_path',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _descriptionMeta = const VerificationMeta(
+    'description',
+  );
+  @override
+  late final GeneratedColumn<String> description = GeneratedColumn<String>(
+    'description',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _translatorMeta = const VerificationMeta(
+    'translator',
+  );
+  @override
+  late final GeneratedColumn<String> translator = GeneratedColumn<String>(
+    'translator',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _publisherMeta = const VerificationMeta(
+    'publisher',
+  );
+  @override
+  late final GeneratedColumn<String> publisher = GeneratedColumn<String>(
+    'publisher',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _publishDateMeta = const VerificationMeta(
+    'publishDate',
+  );
+  @override
+  late final GeneratedColumn<String> publishDate = GeneratedColumn<String>(
+    'publish_date',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _isbnMeta = const VerificationMeta('isbn');
+  @override
+  late final GeneratedColumn<String> isbn = GeneratedColumn<String>(
+    'isbn',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _wordCountMeta = const VerificationMeta(
+    'wordCount',
+  );
+  @override
+  late final GeneratedColumn<int> wordCount = GeneratedColumn<int>(
+    'word_count',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ratingMeta = const VerificationMeta('rating');
+  @override
+  late final GeneratedColumn<double> rating = GeneratedColumn<double>(
+    'rating',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _ratingCountMeta = const VerificationMeta(
+    'ratingCount',
+  );
+  @override
+  late final GeneratedColumn<int> ratingCount = GeneratedColumn<int>(
+    'rating_count',
+    aliasedName,
+    true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _metadataSourceMeta = const VerificationMeta(
+    'metadataSource',
+  );
+  @override
+  late final GeneratedColumn<String> metadataSource = GeneratedColumn<String>(
+    'metadata_source',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('manual'),
+  );
+  static const VerificationMeta _metadataUpdatedAtMeta = const VerificationMeta(
+    'metadataUpdatedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> metadataUpdatedAt =
+      GeneratedColumn<DateTime>(
+        'metadata_updated_at',
+        aliasedName,
+        true,
+        type: DriftSqlType.dateTime,
+        requiredDuringInsert: false,
+      );
   static const VerificationMeta _totalPagesMeta = const VerificationMeta(
     'totalPages',
   );
@@ -141,6 +271,18 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
     id,
     title,
     author,
+    coverUrl,
+    coverPath,
+    description,
+    translator,
+    publisher,
+    publishDate,
+    isbn,
+    wordCount,
+    rating,
+    ratingCount,
+    metadataSource,
+    metadataUpdatedAt,
     totalPages,
     currentPage,
     priority,
@@ -178,6 +320,93 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
       context.handle(
         _authorMeta,
         author.isAcceptableOrUnknown(data['author']!, _authorMeta),
+      );
+    }
+    if (data.containsKey('cover_url')) {
+      context.handle(
+        _coverUrlMeta,
+        coverUrl.isAcceptableOrUnknown(data['cover_url']!, _coverUrlMeta),
+      );
+    }
+    if (data.containsKey('cover_path')) {
+      context.handle(
+        _coverPathMeta,
+        coverPath.isAcceptableOrUnknown(data['cover_path']!, _coverPathMeta),
+      );
+    }
+    if (data.containsKey('description')) {
+      context.handle(
+        _descriptionMeta,
+        description.isAcceptableOrUnknown(
+          data['description']!,
+          _descriptionMeta,
+        ),
+      );
+    }
+    if (data.containsKey('translator')) {
+      context.handle(
+        _translatorMeta,
+        translator.isAcceptableOrUnknown(data['translator']!, _translatorMeta),
+      );
+    }
+    if (data.containsKey('publisher')) {
+      context.handle(
+        _publisherMeta,
+        publisher.isAcceptableOrUnknown(data['publisher']!, _publisherMeta),
+      );
+    }
+    if (data.containsKey('publish_date')) {
+      context.handle(
+        _publishDateMeta,
+        publishDate.isAcceptableOrUnknown(
+          data['publish_date']!,
+          _publishDateMeta,
+        ),
+      );
+    }
+    if (data.containsKey('isbn')) {
+      context.handle(
+        _isbnMeta,
+        isbn.isAcceptableOrUnknown(data['isbn']!, _isbnMeta),
+      );
+    }
+    if (data.containsKey('word_count')) {
+      context.handle(
+        _wordCountMeta,
+        wordCount.isAcceptableOrUnknown(data['word_count']!, _wordCountMeta),
+      );
+    }
+    if (data.containsKey('rating')) {
+      context.handle(
+        _ratingMeta,
+        rating.isAcceptableOrUnknown(data['rating']!, _ratingMeta),
+      );
+    }
+    if (data.containsKey('rating_count')) {
+      context.handle(
+        _ratingCountMeta,
+        ratingCount.isAcceptableOrUnknown(
+          data['rating_count']!,
+          _ratingCountMeta,
+        ),
+      );
+    }
+    if (data.containsKey('metadata_source')) {
+      context.handle(
+        _metadataSourceMeta,
+        metadataSource.isAcceptableOrUnknown(
+          data['metadata_source']!,
+          _metadataSourceMeta,
+        ),
+      );
+    }
+    if (data.containsKey('metadata_updated_at')) {
+      context.handle(
+        _metadataUpdatedAtMeta,
+        metadataUpdatedAt.isAcceptableOrUnknown(
+          data['metadata_updated_at']!,
+          _metadataUpdatedAtMeta,
+        ),
       );
     }
     if (data.containsKey('total_pages')) {
@@ -266,6 +495,54 @@ class $BooksTable extends Books with TableInfo<$BooksTable, Book> {
         DriftSqlType.string,
         data['${effectivePrefix}author'],
       ),
+      coverUrl: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_url'],
+      ),
+      coverPath: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}cover_path'],
+      ),
+      description: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}description'],
+      ),
+      translator: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}translator'],
+      ),
+      publisher: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}publisher'],
+      ),
+      publishDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}publish_date'],
+      ),
+      isbn: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}isbn'],
+      ),
+      wordCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}word_count'],
+      ),
+      rating: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}rating'],
+      ),
+      ratingCount: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}rating_count'],
+      ),
+      metadataSource: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}metadata_source'],
+      )!,
+      metadataUpdatedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}metadata_updated_at'],
+      ),
       totalPages: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}total_pages'],
@@ -315,6 +592,33 @@ class Book extends DataClass implements Insertable<Book> {
   final int id;
   final String title;
   final String? author;
+
+  /// 封面地址。列表和详情展示用，加载失败时显示占位图。
+  final String? coverUrl;
+
+  /// 上传封面的本地路径；Web 端可能存为 data:image/... 的 data URI。
+  /// 优先级高于 coverUrl。
+  final String? coverPath;
+
+  /// 书籍简介。仅在详情页展示。
+  final String? description;
+  final String? translator;
+  final String? publisher;
+  final String? publishDate;
+  final String? isbn;
+
+  /// 字数，用于展示和估算页数。
+  final int? wordCount;
+
+  /// 评分，0-10。
+  final double? rating;
+  final int? ratingCount;
+
+  /// manual | weread | import
+  final String metadataSource;
+
+  /// 最近一次元数据拉取/导入时间。
+  final DateTime? metadataUpdatedAt;
   final int totalPages;
 
   /// 已读到的页码（读完的页数），下一页从 currentPage + 1 开始。
@@ -343,6 +647,18 @@ class Book extends DataClass implements Insertable<Book> {
     required this.id,
     required this.title,
     this.author,
+    this.coverUrl,
+    this.coverPath,
+    this.description,
+    this.translator,
+    this.publisher,
+    this.publishDate,
+    this.isbn,
+    this.wordCount,
+    this.rating,
+    this.ratingCount,
+    required this.metadataSource,
+    this.metadataUpdatedAt,
     required this.totalPages,
     required this.currentPage,
     required this.priority,
@@ -360,6 +676,40 @@ class Book extends DataClass implements Insertable<Book> {
     map['title'] = Variable<String>(title);
     if (!nullToAbsent || author != null) {
       map['author'] = Variable<String>(author);
+    }
+    if (!nullToAbsent || coverUrl != null) {
+      map['cover_url'] = Variable<String>(coverUrl);
+    }
+    if (!nullToAbsent || coverPath != null) {
+      map['cover_path'] = Variable<String>(coverPath);
+    }
+    if (!nullToAbsent || description != null) {
+      map['description'] = Variable<String>(description);
+    }
+    if (!nullToAbsent || translator != null) {
+      map['translator'] = Variable<String>(translator);
+    }
+    if (!nullToAbsent || publisher != null) {
+      map['publisher'] = Variable<String>(publisher);
+    }
+    if (!nullToAbsent || publishDate != null) {
+      map['publish_date'] = Variable<String>(publishDate);
+    }
+    if (!nullToAbsent || isbn != null) {
+      map['isbn'] = Variable<String>(isbn);
+    }
+    if (!nullToAbsent || wordCount != null) {
+      map['word_count'] = Variable<int>(wordCount);
+    }
+    if (!nullToAbsent || rating != null) {
+      map['rating'] = Variable<double>(rating);
+    }
+    if (!nullToAbsent || ratingCount != null) {
+      map['rating_count'] = Variable<int>(ratingCount);
+    }
+    map['metadata_source'] = Variable<String>(metadataSource);
+    if (!nullToAbsent || metadataUpdatedAt != null) {
+      map['metadata_updated_at'] = Variable<DateTime>(metadataUpdatedAt);
     }
     map['total_pages'] = Variable<int>(totalPages);
     map['current_page'] = Variable<int>(currentPage);
@@ -386,6 +736,38 @@ class Book extends DataClass implements Insertable<Book> {
       author: author == null && nullToAbsent
           ? const Value.absent()
           : Value(author),
+      coverUrl: coverUrl == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coverUrl),
+      coverPath: coverPath == null && nullToAbsent
+          ? const Value.absent()
+          : Value(coverPath),
+      description: description == null && nullToAbsent
+          ? const Value.absent()
+          : Value(description),
+      translator: translator == null && nullToAbsent
+          ? const Value.absent()
+          : Value(translator),
+      publisher: publisher == null && nullToAbsent
+          ? const Value.absent()
+          : Value(publisher),
+      publishDate: publishDate == null && nullToAbsent
+          ? const Value.absent()
+          : Value(publishDate),
+      isbn: isbn == null && nullToAbsent ? const Value.absent() : Value(isbn),
+      wordCount: wordCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(wordCount),
+      rating: rating == null && nullToAbsent
+          ? const Value.absent()
+          : Value(rating),
+      ratingCount: ratingCount == null && nullToAbsent
+          ? const Value.absent()
+          : Value(ratingCount),
+      metadataSource: Value(metadataSource),
+      metadataUpdatedAt: metadataUpdatedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(metadataUpdatedAt),
       totalPages: Value(totalPages),
       currentPage: Value(currentPage),
       priority: Value(priority),
@@ -411,6 +793,20 @@ class Book extends DataClass implements Insertable<Book> {
       id: serializer.fromJson<int>(json['id']),
       title: serializer.fromJson<String>(json['title']),
       author: serializer.fromJson<String?>(json['author']),
+      coverUrl: serializer.fromJson<String?>(json['coverUrl']),
+      coverPath: serializer.fromJson<String?>(json['coverPath']),
+      description: serializer.fromJson<String?>(json['description']),
+      translator: serializer.fromJson<String?>(json['translator']),
+      publisher: serializer.fromJson<String?>(json['publisher']),
+      publishDate: serializer.fromJson<String?>(json['publishDate']),
+      isbn: serializer.fromJson<String?>(json['isbn']),
+      wordCount: serializer.fromJson<int?>(json['wordCount']),
+      rating: serializer.fromJson<double?>(json['rating']),
+      ratingCount: serializer.fromJson<int?>(json['ratingCount']),
+      metadataSource: serializer.fromJson<String>(json['metadataSource']),
+      metadataUpdatedAt: serializer.fromJson<DateTime?>(
+        json['metadataUpdatedAt'],
+      ),
       totalPages: serializer.fromJson<int>(json['totalPages']),
       currentPage: serializer.fromJson<int>(json['currentPage']),
       priority: serializer.fromJson<int>(json['priority']),
@@ -431,6 +827,18 @@ class Book extends DataClass implements Insertable<Book> {
       'id': serializer.toJson<int>(id),
       'title': serializer.toJson<String>(title),
       'author': serializer.toJson<String?>(author),
+      'coverUrl': serializer.toJson<String?>(coverUrl),
+      'coverPath': serializer.toJson<String?>(coverPath),
+      'description': serializer.toJson<String?>(description),
+      'translator': serializer.toJson<String?>(translator),
+      'publisher': serializer.toJson<String?>(publisher),
+      'publishDate': serializer.toJson<String?>(publishDate),
+      'isbn': serializer.toJson<String?>(isbn),
+      'wordCount': serializer.toJson<int?>(wordCount),
+      'rating': serializer.toJson<double?>(rating),
+      'ratingCount': serializer.toJson<int?>(ratingCount),
+      'metadataSource': serializer.toJson<String>(metadataSource),
+      'metadataUpdatedAt': serializer.toJson<DateTime?>(metadataUpdatedAt),
       'totalPages': serializer.toJson<int>(totalPages),
       'currentPage': serializer.toJson<int>(currentPage),
       'priority': serializer.toJson<int>(priority),
@@ -447,6 +855,18 @@ class Book extends DataClass implements Insertable<Book> {
     int? id,
     String? title,
     Value<String?> author = const Value.absent(),
+    Value<String?> coverUrl = const Value.absent(),
+    Value<String?> coverPath = const Value.absent(),
+    Value<String?> description = const Value.absent(),
+    Value<String?> translator = const Value.absent(),
+    Value<String?> publisher = const Value.absent(),
+    Value<String?> publishDate = const Value.absent(),
+    Value<String?> isbn = const Value.absent(),
+    Value<int?> wordCount = const Value.absent(),
+    Value<double?> rating = const Value.absent(),
+    Value<int?> ratingCount = const Value.absent(),
+    String? metadataSource,
+    Value<DateTime?> metadataUpdatedAt = const Value.absent(),
     int? totalPages,
     int? currentPage,
     int? priority,
@@ -460,6 +880,20 @@ class Book extends DataClass implements Insertable<Book> {
     id: id ?? this.id,
     title: title ?? this.title,
     author: author.present ? author.value : this.author,
+    coverUrl: coverUrl.present ? coverUrl.value : this.coverUrl,
+    coverPath: coverPath.present ? coverPath.value : this.coverPath,
+    description: description.present ? description.value : this.description,
+    translator: translator.present ? translator.value : this.translator,
+    publisher: publisher.present ? publisher.value : this.publisher,
+    publishDate: publishDate.present ? publishDate.value : this.publishDate,
+    isbn: isbn.present ? isbn.value : this.isbn,
+    wordCount: wordCount.present ? wordCount.value : this.wordCount,
+    rating: rating.present ? rating.value : this.rating,
+    ratingCount: ratingCount.present ? ratingCount.value : this.ratingCount,
+    metadataSource: metadataSource ?? this.metadataSource,
+    metadataUpdatedAt: metadataUpdatedAt.present
+        ? metadataUpdatedAt.value
+        : this.metadataUpdatedAt,
     totalPages: totalPages ?? this.totalPages,
     currentPage: currentPage ?? this.currentPage,
     priority: priority ?? this.priority,
@@ -479,6 +913,30 @@ class Book extends DataClass implements Insertable<Book> {
       id: data.id.present ? data.id.value : this.id,
       title: data.title.present ? data.title.value : this.title,
       author: data.author.present ? data.author.value : this.author,
+      coverUrl: data.coverUrl.present ? data.coverUrl.value : this.coverUrl,
+      coverPath: data.coverPath.present ? data.coverPath.value : this.coverPath,
+      description: data.description.present
+          ? data.description.value
+          : this.description,
+      translator: data.translator.present
+          ? data.translator.value
+          : this.translator,
+      publisher: data.publisher.present ? data.publisher.value : this.publisher,
+      publishDate: data.publishDate.present
+          ? data.publishDate.value
+          : this.publishDate,
+      isbn: data.isbn.present ? data.isbn.value : this.isbn,
+      wordCount: data.wordCount.present ? data.wordCount.value : this.wordCount,
+      rating: data.rating.present ? data.rating.value : this.rating,
+      ratingCount: data.ratingCount.present
+          ? data.ratingCount.value
+          : this.ratingCount,
+      metadataSource: data.metadataSource.present
+          ? data.metadataSource.value
+          : this.metadataSource,
+      metadataUpdatedAt: data.metadataUpdatedAt.present
+          ? data.metadataUpdatedAt.value
+          : this.metadataUpdatedAt,
       totalPages: data.totalPages.present
           ? data.totalPages.value
           : this.totalPages,
@@ -505,6 +963,18 @@ class Book extends DataClass implements Insertable<Book> {
           ..write('id: $id, ')
           ..write('title: $title, ')
           ..write('author: $author, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('coverPath: $coverPath, ')
+          ..write('description: $description, ')
+          ..write('translator: $translator, ')
+          ..write('publisher: $publisher, ')
+          ..write('publishDate: $publishDate, ')
+          ..write('isbn: $isbn, ')
+          ..write('wordCount: $wordCount, ')
+          ..write('rating: $rating, ')
+          ..write('ratingCount: $ratingCount, ')
+          ..write('metadataSource: $metadataSource, ')
+          ..write('metadataUpdatedAt: $metadataUpdatedAt, ')
           ..write('totalPages: $totalPages, ')
           ..write('currentPage: $currentPage, ')
           ..write('priority: $priority, ')
@@ -519,10 +989,22 @@ class Book extends DataClass implements Insertable<Book> {
   }
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     id,
     title,
     author,
+    coverUrl,
+    coverPath,
+    description,
+    translator,
+    publisher,
+    publishDate,
+    isbn,
+    wordCount,
+    rating,
+    ratingCount,
+    metadataSource,
+    metadataUpdatedAt,
     totalPages,
     currentPage,
     priority,
@@ -532,7 +1014,7 @@ class Book extends DataClass implements Insertable<Book> {
     manualPagesPerHour,
     measuredPagesPerHour,
     createdAt,
-  );
+  ]);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -540,6 +1022,18 @@ class Book extends DataClass implements Insertable<Book> {
           other.id == this.id &&
           other.title == this.title &&
           other.author == this.author &&
+          other.coverUrl == this.coverUrl &&
+          other.coverPath == this.coverPath &&
+          other.description == this.description &&
+          other.translator == this.translator &&
+          other.publisher == this.publisher &&
+          other.publishDate == this.publishDate &&
+          other.isbn == this.isbn &&
+          other.wordCount == this.wordCount &&
+          other.rating == this.rating &&
+          other.ratingCount == this.ratingCount &&
+          other.metadataSource == this.metadataSource &&
+          other.metadataUpdatedAt == this.metadataUpdatedAt &&
           other.totalPages == this.totalPages &&
           other.currentPage == this.currentPage &&
           other.priority == this.priority &&
@@ -555,6 +1049,18 @@ class BooksCompanion extends UpdateCompanion<Book> {
   final Value<int> id;
   final Value<String> title;
   final Value<String?> author;
+  final Value<String?> coverUrl;
+  final Value<String?> coverPath;
+  final Value<String?> description;
+  final Value<String?> translator;
+  final Value<String?> publisher;
+  final Value<String?> publishDate;
+  final Value<String?> isbn;
+  final Value<int?> wordCount;
+  final Value<double?> rating;
+  final Value<int?> ratingCount;
+  final Value<String> metadataSource;
+  final Value<DateTime?> metadataUpdatedAt;
   final Value<int> totalPages;
   final Value<int> currentPage;
   final Value<int> priority;
@@ -568,6 +1074,18 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.id = const Value.absent(),
     this.title = const Value.absent(),
     this.author = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.coverPath = const Value.absent(),
+    this.description = const Value.absent(),
+    this.translator = const Value.absent(),
+    this.publisher = const Value.absent(),
+    this.publishDate = const Value.absent(),
+    this.isbn = const Value.absent(),
+    this.wordCount = const Value.absent(),
+    this.rating = const Value.absent(),
+    this.ratingCount = const Value.absent(),
+    this.metadataSource = const Value.absent(),
+    this.metadataUpdatedAt = const Value.absent(),
     this.totalPages = const Value.absent(),
     this.currentPage = const Value.absent(),
     this.priority = const Value.absent(),
@@ -582,6 +1100,18 @@ class BooksCompanion extends UpdateCompanion<Book> {
     this.id = const Value.absent(),
     required String title,
     this.author = const Value.absent(),
+    this.coverUrl = const Value.absent(),
+    this.coverPath = const Value.absent(),
+    this.description = const Value.absent(),
+    this.translator = const Value.absent(),
+    this.publisher = const Value.absent(),
+    this.publishDate = const Value.absent(),
+    this.isbn = const Value.absent(),
+    this.wordCount = const Value.absent(),
+    this.rating = const Value.absent(),
+    this.ratingCount = const Value.absent(),
+    this.metadataSource = const Value.absent(),
+    this.metadataUpdatedAt = const Value.absent(),
     required int totalPages,
     this.currentPage = const Value.absent(),
     this.priority = const Value.absent(),
@@ -597,6 +1127,18 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Expression<int>? id,
     Expression<String>? title,
     Expression<String>? author,
+    Expression<String>? coverUrl,
+    Expression<String>? coverPath,
+    Expression<String>? description,
+    Expression<String>? translator,
+    Expression<String>? publisher,
+    Expression<String>? publishDate,
+    Expression<String>? isbn,
+    Expression<int>? wordCount,
+    Expression<double>? rating,
+    Expression<int>? ratingCount,
+    Expression<String>? metadataSource,
+    Expression<DateTime>? metadataUpdatedAt,
     Expression<int>? totalPages,
     Expression<int>? currentPage,
     Expression<int>? priority,
@@ -611,6 +1153,18 @@ class BooksCompanion extends UpdateCompanion<Book> {
       if (id != null) 'id': id,
       if (title != null) 'title': title,
       if (author != null) 'author': author,
+      if (coverUrl != null) 'cover_url': coverUrl,
+      if (coverPath != null) 'cover_path': coverPath,
+      if (description != null) 'description': description,
+      if (translator != null) 'translator': translator,
+      if (publisher != null) 'publisher': publisher,
+      if (publishDate != null) 'publish_date': publishDate,
+      if (isbn != null) 'isbn': isbn,
+      if (wordCount != null) 'word_count': wordCount,
+      if (rating != null) 'rating': rating,
+      if (ratingCount != null) 'rating_count': ratingCount,
+      if (metadataSource != null) 'metadata_source': metadataSource,
+      if (metadataUpdatedAt != null) 'metadata_updated_at': metadataUpdatedAt,
       if (totalPages != null) 'total_pages': totalPages,
       if (currentPage != null) 'current_page': currentPage,
       if (priority != null) 'priority': priority,
@@ -629,6 +1183,18 @@ class BooksCompanion extends UpdateCompanion<Book> {
     Value<int>? id,
     Value<String>? title,
     Value<String?>? author,
+    Value<String?>? coverUrl,
+    Value<String?>? coverPath,
+    Value<String?>? description,
+    Value<String?>? translator,
+    Value<String?>? publisher,
+    Value<String?>? publishDate,
+    Value<String?>? isbn,
+    Value<int?>? wordCount,
+    Value<double?>? rating,
+    Value<int?>? ratingCount,
+    Value<String>? metadataSource,
+    Value<DateTime?>? metadataUpdatedAt,
     Value<int>? totalPages,
     Value<int>? currentPage,
     Value<int>? priority,
@@ -643,6 +1209,18 @@ class BooksCompanion extends UpdateCompanion<Book> {
       id: id ?? this.id,
       title: title ?? this.title,
       author: author ?? this.author,
+      coverUrl: coverUrl ?? this.coverUrl,
+      coverPath: coverPath ?? this.coverPath,
+      description: description ?? this.description,
+      translator: translator ?? this.translator,
+      publisher: publisher ?? this.publisher,
+      publishDate: publishDate ?? this.publishDate,
+      isbn: isbn ?? this.isbn,
+      wordCount: wordCount ?? this.wordCount,
+      rating: rating ?? this.rating,
+      ratingCount: ratingCount ?? this.ratingCount,
+      metadataSource: metadataSource ?? this.metadataSource,
+      metadataUpdatedAt: metadataUpdatedAt ?? this.metadataUpdatedAt,
       totalPages: totalPages ?? this.totalPages,
       currentPage: currentPage ?? this.currentPage,
       priority: priority ?? this.priority,
@@ -666,6 +1244,42 @@ class BooksCompanion extends UpdateCompanion<Book> {
     }
     if (author.present) {
       map['author'] = Variable<String>(author.value);
+    }
+    if (coverUrl.present) {
+      map['cover_url'] = Variable<String>(coverUrl.value);
+    }
+    if (coverPath.present) {
+      map['cover_path'] = Variable<String>(coverPath.value);
+    }
+    if (description.present) {
+      map['description'] = Variable<String>(description.value);
+    }
+    if (translator.present) {
+      map['translator'] = Variable<String>(translator.value);
+    }
+    if (publisher.present) {
+      map['publisher'] = Variable<String>(publisher.value);
+    }
+    if (publishDate.present) {
+      map['publish_date'] = Variable<String>(publishDate.value);
+    }
+    if (isbn.present) {
+      map['isbn'] = Variable<String>(isbn.value);
+    }
+    if (wordCount.present) {
+      map['word_count'] = Variable<int>(wordCount.value);
+    }
+    if (rating.present) {
+      map['rating'] = Variable<double>(rating.value);
+    }
+    if (ratingCount.present) {
+      map['rating_count'] = Variable<int>(ratingCount.value);
+    }
+    if (metadataSource.present) {
+      map['metadata_source'] = Variable<String>(metadataSource.value);
+    }
+    if (metadataUpdatedAt.present) {
+      map['metadata_updated_at'] = Variable<DateTime>(metadataUpdatedAt.value);
     }
     if (totalPages.present) {
       map['total_pages'] = Variable<int>(totalPages.value);
@@ -705,6 +1319,18 @@ class BooksCompanion extends UpdateCompanion<Book> {
           ..write('id: $id, ')
           ..write('title: $title, ')
           ..write('author: $author, ')
+          ..write('coverUrl: $coverUrl, ')
+          ..write('coverPath: $coverPath, ')
+          ..write('description: $description, ')
+          ..write('translator: $translator, ')
+          ..write('publisher: $publisher, ')
+          ..write('publishDate: $publishDate, ')
+          ..write('isbn: $isbn, ')
+          ..write('wordCount: $wordCount, ')
+          ..write('rating: $rating, ')
+          ..write('ratingCount: $ratingCount, ')
+          ..write('metadataSource: $metadataSource, ')
+          ..write('metadataUpdatedAt: $metadataUpdatedAt, ')
           ..write('totalPages: $totalPages, ')
           ..write('currentPage: $currentPage, ')
           ..write('priority: $priority, ')
@@ -4166,6 +4792,18 @@ typedef $$BooksTableCreateCompanionBuilder =
       Value<int> id,
       required String title,
       Value<String?> author,
+      Value<String?> coverUrl,
+      Value<String?> coverPath,
+      Value<String?> description,
+      Value<String?> translator,
+      Value<String?> publisher,
+      Value<String?> publishDate,
+      Value<String?> isbn,
+      Value<int?> wordCount,
+      Value<double?> rating,
+      Value<int?> ratingCount,
+      Value<String> metadataSource,
+      Value<DateTime?> metadataUpdatedAt,
       required int totalPages,
       Value<int> currentPage,
       Value<int> priority,
@@ -4181,6 +4819,18 @@ typedef $$BooksTableUpdateCompanionBuilder =
       Value<int> id,
       Value<String> title,
       Value<String?> author,
+      Value<String?> coverUrl,
+      Value<String?> coverPath,
+      Value<String?> description,
+      Value<String?> translator,
+      Value<String?> publisher,
+      Value<String?> publishDate,
+      Value<String?> isbn,
+      Value<int?> wordCount,
+      Value<double?> rating,
+      Value<int?> ratingCount,
+      Value<String> metadataSource,
+      Value<DateTime?> metadataUpdatedAt,
       Value<int> totalPages,
       Value<int> currentPage,
       Value<int> priority,
@@ -4294,6 +4944,66 @@ class $$BooksTableFilterComposer extends Composer<_$AppDatabase, $BooksTable> {
 
   ColumnFilters<String> get author => $composableBuilder(
     column: $table.author,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get coverPath => $composableBuilder(
+    column: $table.coverPath,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get translator => $composableBuilder(
+    column: $table.translator,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get publisher => $composableBuilder(
+    column: $table.publisher,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get publishDate => $composableBuilder(
+    column: $table.publishDate,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get isbn => $composableBuilder(
+    column: $table.isbn,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get wordCount => $composableBuilder(
+    column: $table.wordCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get rating => $composableBuilder(
+    column: $table.rating,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get ratingCount => $composableBuilder(
+    column: $table.ratingCount,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get metadataSource => $composableBuilder(
+    column: $table.metadataSource,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get metadataUpdatedAt => $composableBuilder(
+    column: $table.metadataUpdatedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4467,6 +5177,66 @@ class $$BooksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get coverUrl => $composableBuilder(
+    column: $table.coverUrl,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get coverPath => $composableBuilder(
+    column: $table.coverPath,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get translator => $composableBuilder(
+    column: $table.translator,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get publisher => $composableBuilder(
+    column: $table.publisher,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get publishDate => $composableBuilder(
+    column: $table.publishDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get isbn => $composableBuilder(
+    column: $table.isbn,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get wordCount => $composableBuilder(
+    column: $table.wordCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get rating => $composableBuilder(
+    column: $table.rating,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get ratingCount => $composableBuilder(
+    column: $table.ratingCount,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get metadataSource => $composableBuilder(
+    column: $table.metadataSource,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get metadataUpdatedAt => $composableBuilder(
+    column: $table.metadataUpdatedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get totalPages => $composableBuilder(
     column: $table.totalPages,
     builder: (column) => ColumnOrderings(column),
@@ -4530,6 +5300,54 @@ class $$BooksTableAnnotationComposer
 
   GeneratedColumn<String> get author =>
       $composableBuilder(column: $table.author, builder: (column) => column);
+
+  GeneratedColumn<String> get coverUrl =>
+      $composableBuilder(column: $table.coverUrl, builder: (column) => column);
+
+  GeneratedColumn<String> get coverPath =>
+      $composableBuilder(column: $table.coverPath, builder: (column) => column);
+
+  GeneratedColumn<String> get description => $composableBuilder(
+    column: $table.description,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get translator => $composableBuilder(
+    column: $table.translator,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get publisher =>
+      $composableBuilder(column: $table.publisher, builder: (column) => column);
+
+  GeneratedColumn<String> get publishDate => $composableBuilder(
+    column: $table.publishDate,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get isbn =>
+      $composableBuilder(column: $table.isbn, builder: (column) => column);
+
+  GeneratedColumn<int> get wordCount =>
+      $composableBuilder(column: $table.wordCount, builder: (column) => column);
+
+  GeneratedColumn<double> get rating =>
+      $composableBuilder(column: $table.rating, builder: (column) => column);
+
+  GeneratedColumn<int> get ratingCount => $composableBuilder(
+    column: $table.ratingCount,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get metadataSource => $composableBuilder(
+    column: $table.metadataSource,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<DateTime> get metadataUpdatedAt => $composableBuilder(
+    column: $table.metadataUpdatedAt,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<int> get totalPages => $composableBuilder(
     column: $table.totalPages,
@@ -4703,6 +5521,18 @@ class $$BooksTableTableManager
                 Value<int> id = const Value.absent(),
                 Value<String> title = const Value.absent(),
                 Value<String?> author = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String?> coverPath = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String?> translator = const Value.absent(),
+                Value<String?> publisher = const Value.absent(),
+                Value<String?> publishDate = const Value.absent(),
+                Value<String?> isbn = const Value.absent(),
+                Value<int?> wordCount = const Value.absent(),
+                Value<double?> rating = const Value.absent(),
+                Value<int?> ratingCount = const Value.absent(),
+                Value<String> metadataSource = const Value.absent(),
+                Value<DateTime?> metadataUpdatedAt = const Value.absent(),
                 Value<int> totalPages = const Value.absent(),
                 Value<int> currentPage = const Value.absent(),
                 Value<int> priority = const Value.absent(),
@@ -4716,6 +5546,18 @@ class $$BooksTableTableManager
                 id: id,
                 title: title,
                 author: author,
+                coverUrl: coverUrl,
+                coverPath: coverPath,
+                description: description,
+                translator: translator,
+                publisher: publisher,
+                publishDate: publishDate,
+                isbn: isbn,
+                wordCount: wordCount,
+                rating: rating,
+                ratingCount: ratingCount,
+                metadataSource: metadataSource,
+                metadataUpdatedAt: metadataUpdatedAt,
                 totalPages: totalPages,
                 currentPage: currentPage,
                 priority: priority,
@@ -4731,6 +5573,18 @@ class $$BooksTableTableManager
                 Value<int> id = const Value.absent(),
                 required String title,
                 Value<String?> author = const Value.absent(),
+                Value<String?> coverUrl = const Value.absent(),
+                Value<String?> coverPath = const Value.absent(),
+                Value<String?> description = const Value.absent(),
+                Value<String?> translator = const Value.absent(),
+                Value<String?> publisher = const Value.absent(),
+                Value<String?> publishDate = const Value.absent(),
+                Value<String?> isbn = const Value.absent(),
+                Value<int?> wordCount = const Value.absent(),
+                Value<double?> rating = const Value.absent(),
+                Value<int?> ratingCount = const Value.absent(),
+                Value<String> metadataSource = const Value.absent(),
+                Value<DateTime?> metadataUpdatedAt = const Value.absent(),
                 required int totalPages,
                 Value<int> currentPage = const Value.absent(),
                 Value<int> priority = const Value.absent(),
@@ -4744,6 +5598,18 @@ class $$BooksTableTableManager
                 id: id,
                 title: title,
                 author: author,
+                coverUrl: coverUrl,
+                coverPath: coverPath,
+                description: description,
+                translator: translator,
+                publisher: publisher,
+                publishDate: publishDate,
+                isbn: isbn,
+                wordCount: wordCount,
+                rating: rating,
+                ratingCount: ratingCount,
+                metadataSource: metadataSource,
+                metadataUpdatedAt: metadataUpdatedAt,
                 totalPages: totalPages,
                 currentPage: currentPage,
                 priority: priority,

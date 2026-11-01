@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../core/format_x.dart';
 import '../data/book_status.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
 import 'book_detail_page.dart';
 import 'book_form_page.dart';
+import 'widgets/book_cover.dart';
 import 'widgets/tag_picker_sheet.dart';
 
 class BooksPage extends ConsumerStatefulWidget {
@@ -242,6 +244,11 @@ class _BookTile extends ConsumerWidget {
     final progress = book.totalPages == 0
         ? 0.0
         : book.currentPage / book.totalPages;
+    final tags = parseTags(book.tags);
+    final rating = formatRating(book.rating);
+    final author = (book.author == null || book.author!.trim().isEmpty)
+        ? '未知作者'
+        : book.author!;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -251,138 +258,174 @@ class _BookTile extends ConsumerWidget {
           MaterialPageRoute(builder: (_) => BookDetailPage(bookId: book.id)),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
+          padding: const EdgeInsets.all(12),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      book.title,
+              BookCover(book: book, width: 56, height: 80),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            book.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (rating.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.star_rounded,
+                            size: 15,
+                            color: theme.colorScheme.tertiary,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(rating, style: theme.textTheme.labelSmall),
+                        ],
+                        PopupMenuButton<String>(
+                          tooltip: '修改阅读状态',
+                          initialValue: book.status,
+                          onSelected: (next) async {
+                            await ref
+                                .read(repositoryProvider)
+                                .setBookStatus(book.id, next);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '已标记为「${BookStatus.label(next)}」',
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            for (final status in BookStatus.all)
+                              CheckedPopupMenuItem(
+                                value: status,
+                                checked: book.status == status,
+                                child: Text(BookStatus.label(status)),
+                              ),
+                          ],
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(Icons.more_vert, size: 18),
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      author,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
-                  ),
-                  PopupMenuButton<String>(
-                    tooltip: '修改阅读状态',
-                    initialValue: book.status,
-                    onSelected: (next) async {
-                      await ref
-                          .read(repositoryProvider)
-                          .setBookStatus(book.id, next);
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('已标记为「${BookStatus.label(next)}」'),
+                    if (tags.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Wrap(
+                        spacing: 5,
+                        runSpacing: 3,
+                        children: [
+                          for (final t in tags.take(3))
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 7,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                '#$t',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: theme.colorScheme.onSecondaryContainer,
+                                ),
+                              ),
+                            ),
+                          if (tags.length > 3)
+                            Text(
+                              '+${tags.length - 3}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: progress.clamp(0.0, 1.0),
+                        minHeight: 6,
+                        backgroundColor:
+                            theme.colorScheme.surfaceContainerHighest,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Row(
+                      children: [
+                        Text(
+                          '${book.currentPage} / ${book.totalPages} 页',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '剩余 ${book.totalPages - book.currentPage} 页',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                        const Spacer(),
+                        _PriorityBadge(
+                          label: _priorityLabel,
+                          priority: book.priority,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    planAsync.maybeWhen(
+                      data: (plan) {
+                        if (book.status != BookStatus.reading) {
+                          return Text(
+                            BookStatus.label(book.status),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.tertiary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          );
+                        }
+                        return Text(
+                          plan == null
+                              ? '未排期'
+                              : plan.deadline == null
+                              ? '无期限'
+                              : '截止 ${plan.deadline!.month}/${plan.deadline!.day}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: plan?.status == 'oversubscribed'
+                                ? theme.colorScheme.error
+                                : plan == null
+                                ? theme.colorScheme.outline
+                                : theme.colorScheme.onSurfaceVariant,
                           ),
                         );
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      for (final status in BookStatus.all)
-                        CheckedPopupMenuItem(
-                          value: status,
-                          checked: book.status == status,
-                          child: Text(BookStatus.label(status)),
-                        ),
-                    ],
-                    child: const Padding(
-                      padding: EdgeInsets.all(6),
-                      child: Icon(Icons.more_vert, size: 20),
+                      },
+                      orElse: () => const SizedBox.shrink(),
                     ),
-                  ),
-                  _PriorityBadge(
-                    label: _priorityLabel,
-                    priority: book.priority,
-                  ),
-                ],
-              ),
-              if (book.author != null && book.author!.isNotEmpty) ...[
-                const SizedBox(height: 2),
-                Text(
-                  book.author!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-              if (parseTags(book.tags).isNotEmpty) ...[
-                const SizedBox(height: 6),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: [
-                    for (final t in parseTags(book.tags))
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.secondaryContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '#$t',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: theme.colorScheme.onSecondaryContainer,
-                          ),
-                        ),
-                      ),
                   ],
                 ),
-              ],
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress.clamp(0.0, 1.0),
-                  minHeight: 6,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Text(
-                    '${book.currentPage} / ${book.totalPages} 页',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                  const Spacer(),
-                  planAsync.maybeWhen(
-                    data: (plan) {
-                      if (book.status != BookStatus.reading) {
-                        return Text(
-                          BookStatus.label(book.status),
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.tertiary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        );
-                      }
-                      return Text(
-                        plan == null
-                            ? '未排期'
-                            : plan.deadline == null
-                            ? '无期限'
-                            : '截止 ${plan.deadline!.month}/${plan.deadline!.day}',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: plan?.status == 'oversubscribed'
-                              ? theme.colorScheme.error
-                              : plan == null
-                              ? theme.colorScheme.outline
-                              : theme.colorScheme.onSurfaceVariant,
-                        ),
-                      );
-                    },
-                    orElse: () => const SizedBox.shrink(),
-                  ),
-                ],
               ),
             ],
           ),

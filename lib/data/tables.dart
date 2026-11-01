@@ -5,6 +5,36 @@ class Books extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get title => text()();
   TextColumn get author => text().nullable()();
+
+  /// 封面地址。列表和详情展示用，加载失败时显示占位图。
+  TextColumn get coverUrl => text().nullable()();
+
+  /// 上传封面的本地路径；Web 端可能存为 data:image/... 的 data URI。
+  /// 优先级高于 coverUrl。
+  TextColumn get coverPath => text().nullable()();
+
+  /// 书籍简介。仅在详情页展示。
+  TextColumn get description => text().nullable()();
+
+  TextColumn get translator => text().nullable()();
+  TextColumn get publisher => text().nullable()();
+  TextColumn get publishDate => text().nullable()();
+  TextColumn get isbn => text().nullable()();
+
+  /// 字数，用于展示和估算页数。
+  IntColumn get wordCount => integer().nullable()();
+
+  /// 评分，0-10。
+  RealColumn get rating => real().nullable()();
+  IntColumn get ratingCount => integer().nullable()();
+
+  /// manual | weread | import
+  TextColumn get metadataSource =>
+      text().withDefault(const Constant('manual'))();
+
+  /// 最近一次元数据拉取/导入时间。
+  DateTimeColumn get metadataUpdatedAt => dateTime().nullable()();
+
   IntColumn get totalPages => integer()();
 
   /// 已读到的页码（读完的页数），下一页从 currentPage + 1 开始。
