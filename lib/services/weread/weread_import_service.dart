@@ -231,6 +231,50 @@ class WereadImportService {
     );
   }
 
+  /// 重新拉取某本已绑定书籍的跳转链接。
+  ///
+  /// 旧数据可能是在接口还没有返回链接字段时导入的；这里会尝试从书架和
+  /// /book/info 补齐 readerLink / deepLink。
+  Future<WereadLink?> refreshLink(int bookId) async {
+    final link = await _repository.getWereadLink(bookId);
+    if (link == null) return null;
+    final key = await _apiKey();
+    String? readerLink = _nonEmpty(link.readerLink);
+    String? deepLink = _nonEmpty(link.deepLink);
+
+    try {
+      final shelf = await _client.fetchShelf(key);
+      for (final item in shelf) {
+        if (item.bookId != link.wereadBookId) continue;
+        readerLink = _nonEmpty(item.readerLink) ?? readerLink;
+        deepLink = _nonEmpty(item.deepLink) ?? deepLink;
+        break;
+      }
+    } catch (_) {
+      // 书架失败时继续尝试 /book/info。
+    }
+
+    if (readerLink == null || deepLink == null) {
+      try {
+        final info = await _client.fetchBookInfo(
+          key,
+          bookId: link.wereadBookId,
+        );
+        readerLink = _nonEmpty(info.readerLink) ?? readerLink;
+        deepLink = _nonEmpty(info.deepLink) ?? deepLink;
+      } catch (_) {
+        // 保留已有链接。
+      }
+    }
+
+    await _repository.updateWereadLinkUrls(
+      bookId,
+      readerLink: readerLink,
+      deepLink: deepLink,
+    );
+    return _repository.getWereadLink(bookId);
+  }
+
   /// 把已有本地书籍绑定到微信读书书籍。
   ///
   /// 只补齐本地为空的元数据，不覆盖用户已填内容；进度只前进不后退。

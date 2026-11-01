@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:drift/native.dart';
@@ -176,5 +177,27 @@ void main() {
     expect(books.length, 1);
     expect(books.single.id, id);
     expect(books.single.title, '备份测试书');
+  });
+  test('完整备份包含本地上传封面和可选的微信读书 Key', () async {
+    final dir = Directory.systemTemp.createTempSync('yueli_backup_cover_');
+    addTearDown(() {
+      if (dir.existsSync()) dir.deleteSync(recursive: true);
+    });
+    final cover = File('${dir.path}/cover.png');
+    cover.writeAsBytesSync([1, 2, 3, 4]);
+    final id = await repo.createBook(
+      title: '带封面的书',
+      totalPages: 100,
+      coverPath: cover.path,
+    );
+
+    final json = await backup.exportJson(wereadApiKey: 'wrk-test-key');
+    expect(json, contains('data:image/png;base64,'));
+    expect(json, contains('wrk-test-key'));
+
+    final summary = await backup.importJson(json);
+    expect(summary.wereadApiKey, 'wrk-test-key');
+    final restored = await repo.getBook(id);
+    expect(restored!.coverPath, startsWith('data:image/png;base64,'));
   });
 }

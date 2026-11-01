@@ -4,6 +4,7 @@ import 'package:archive/archive.dart';
 import 'package:drift/drift.dart';
 
 import '../core/date_x.dart';
+import 'backup_cover.dart';
 import 'book_status.dart';
 import 'database.dart';
 
@@ -27,6 +28,7 @@ class ImportSummary {
     required this.readings,
     required this.restDays,
     required this.wereadLinks,
+    this.wereadApiKey,
   });
 
   final int books;
@@ -36,6 +38,9 @@ class ImportSummary {
   final int readings;
   final int restDays;
   final int wereadLinks;
+
+  /// 备份中携带的微信读书 API Key（仅在用户选择包含时存在）。
+  final String? wereadApiKey;
 
   @override
   String toString() =>
@@ -59,8 +64,11 @@ class BackupService {
   static const formatVersion = 1;
 
   /// 一次性导出：ZIP 内含完整备份 JSON（可导入）和阅读历史 CSV（可查看）。
-  Future<Uint8List> exportArchiveBytes({DateTime? now}) async {
-    final json = await exportJson(now: now);
+  Future<Uint8List> exportArchiveBytes({
+    DateTime? now,
+    String? wereadApiKey,
+  }) async {
+    final json = await exportJson(now: now, wereadApiKey: wereadApiKey);
     final csv = await exportSessionsCsv();
     final archive = Archive()
       ..addFile(ArchiveFile.string('backup.json', json))
@@ -100,7 +108,7 @@ class BackupService {
     return importJson(utf8.decode(entry.content));
   }
 
-  Future<String> exportJson({DateTime? now}) async {
+  Future<String> exportJson({DateTime? now, String? wereadApiKey}) async {
     final books = await db.select(db.books).get();
     final plans = await db.select(db.plans).get();
     final tasks = await db.select(db.tasks).get();
@@ -110,18 +118,31 @@ class BackupService {
     final wereadLinks = await db.select(db.wereadLinks).get();
     final settings = await db.loadSettings();
 
+    // 本地上传封面没有远端地址，转成 data URI 一并写入备份。
+    final coverData = <int, String>{};
+    for (final book in books) {
+      final data = await readCoverDataUri(book.coverPath);
+      if (data != null) coverData[book.id] = data;
+    }
+
     return const JsonEncoder.withIndent('  ').convert({
       'app': appId,
       'format': formatVersion,
+      'schemaVersion': db.schemaVersion,
       'exportedAt': (now ?? DateTime.now()).toIso8601String(),
       'data': {
-        'books': books.map(_bookToJson).toList(),
+        'books': [
+          for (final book in books)
+            _bookToJson(book, coverPath: coverData[book.id]),
+        ],
         'plans': plans.map(_planToJson).toList(),
         'tasks': tasks.map(_taskToJson).toList(),
         'readingSessions': sessions.map(_sessionToJson).toList(),
         'readings': readings.map(_readingToJson).toList(),
         'restDays': restDays.map(_restDayToJson).toList(),
         'wereadLinks': wereadLinks.map(_wereadLinkToJson).toList(),
+        if (wereadApiKey != null && wereadApiKey.trim().isNotEmpty)
+          'wereadApiKey': wereadApiKey.trim(),
         'settings': {
           'pagesPerHour': settings.pagesPerHour,
           'defaultDailyMinutes': settings.defaultDailyMinutes,
@@ -203,6 +224,7 @@ class BackupService {
     final readings = _asList(data['readings']);
     final restDays = _asList(data['restDays']);
     final wereadLinks = _asList(data['wereadLinks']);
+    final wereadApiKey = _asNullableString(data['wereadApiKey']);
     final settings = data['settings'];
 
     await db.transaction(() async {
@@ -260,20 +282,19 @@ class BackupService {
       readings: readings.length,
       restDays: restDays.length,
       wereadLinks: wereadLinks.length,
+      wereadApiKey: wereadApiKey,
     );
   }
 
   // ---------- 导出 ----------
 
-  Map<String, Object?> _bookToJson(Book b) => {
+  Map<String, Object?> _bookToJson(Book b, {String? coverPath}) => {
     'id': b.id,
     'title': b.title,
     'author': b.author,
     'coverUrl': b.coverUrl,
-    // 本地上传封面通常依赖设备路径，不进入备份；Web 端 data URI 可以自包含。
-    'coverPath': b.coverPath?.startsWith('data:image') == true
-        ? b.coverPath
-        : null,
+    // 导出时会把本地封面转成 data URI；读取失败则置空。
+    'coverPath': coverPath,
     'description': b.description,
     'translator': b.translator,
     'publisher': b.publisher,

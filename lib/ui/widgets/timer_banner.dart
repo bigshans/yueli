@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database.dart';
 import '../../services/target_app_service.dart';
+import '../../services/weread/weread_launcher.dart';
+import '../../services/weread/weread_sync_service.dart';
 import '../../state/providers.dart';
 import '../focus_timer_page.dart';
 
@@ -31,17 +33,37 @@ Future<void> startTimerFor(
     return;
   }
   await ref.read(repositoryProvider).startTimer(bookId: bookId, taskId: taskId);
-  await _maybeOpenTargetApp(ref);
+  await _maybeOpenReadingTarget(ref, bookId: bookId);
   if (!context.mounted) return;
   await Navigator.of(
     context,
   ).push(MaterialPageRoute(builder: (_) => const FocusTimerPage()));
 }
 
-/// 安卓端：按设置自动打开指定应用。
-Future<void> _maybeOpenTargetApp(WidgetRef ref) async {
+/// 安卓端：按设置自动打开阅读应用。
+///
+/// 如果这本书绑定了微信读书，优先打开对应书籍页面；
+/// 否则回退到设置里选择的普通应用。
+Future<void> _maybeOpenReadingTarget(WidgetRef ref, {int? bookId}) async {
   final s = ref.read(settingsProvider).valueOrNull;
   if (s == null || !s.autoOpenApp) return;
+
+  if (bookId != null) {
+    final link = await ref.read(repositoryProvider).getWereadLink(bookId);
+    if (link != null) {
+      try {
+        await openWereadBookLink(
+          readerLink: link.readerLink,
+          deepLink: link.deepLink,
+          bookId: link.wereadBookId,
+        );
+        return;
+      } catch (_) {
+        // 链接不可用时继续尝试设置里的兜底应用。
+      }
+    }
+  }
+
   final pkg = s.autoOpenPackage;
   if (pkg == null || pkg.isEmpty) return;
   await TargetAppService.open(pkg);
@@ -54,7 +76,7 @@ Future<void> startFreeTimer(BuildContext context, WidgetRef ref) async {
     return;
   }
   await ref.read(repositoryProvider).startTimer();
-  await _maybeOpenTargetApp(ref);
+  await _maybeOpenReadingTarget(ref);
   if (!context.mounted) return;
   await Navigator.of(
     context,
@@ -143,8 +165,49 @@ Future<void> showStopTimerDialog(BuildContext context, WidgetRef ref) async {
     return;
   }
 
+  // 已绑定微信读书时，结束计时前读取一次远端进度，用来预填「读到第几页」。
+  WereadProgressPreview? wereadPreview;
+  final wereadLink = await repo.getWereadLink(bookId);
+  if (wereadLink != null && context.mounted) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const AlertDialog(
+        content: Row(
+          children: [
+            SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 16),
+            Text('正在读取微信读书进度…'),
+          ],
+        ),
+      ),
+    );
+    try {
+      wereadPreview = await ref
+          .read(wereadSyncServiceProvider)
+          .previewBook(bookId);
+    } catch (_) {
+      // 读取失败时保留原有预填逻辑，不阻断结束计时。
+    } finally {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    }
+  }
+
+  if (!context.mounted) {
+    if (wasRunning) await repo.resumeTimer();
+    return;
+  }
+
+  final initialPage =
+      wereadPreview?.estimatedPage ?? task?.endPage ?? book?.currentPage;
   final pageController = TextEditingController(
-    text: (task?.endPage ?? book?.currentPage)?.toString() ?? '',
+    text: initialPage?.toString() ?? '',
   );
   final minutesController = TextEditingController(text: '${elapsed ~/ 60}');
   final secondsController = TextEditingController(text: '${elapsed % 60}');
@@ -213,6 +276,34 @@ Future<void> showStopTimerDialog(BuildContext context, WidgetRef ref) async {
                   ),
                 ),
               ),
+            if (wereadPreview != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '微信读书进度 ${wereadPreview.remoteProgress}%',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      wereadPreview.finished
+                          ? '微信读书已读完，预填为最后一页。'
+                          : '按本地总页数估算约为第 ${wereadPreview.estimatedPage} 页，可手动修改。',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
             if (task != null) ...[
               SwitchListTile(

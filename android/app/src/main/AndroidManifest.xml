@@ -1,4 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 微信读书同步、封面加载等网络请求。 -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <!-- 阅读计时的常驻通知需要（Android 13+ 运行时申请）。 -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application

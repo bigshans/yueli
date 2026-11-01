@@ -208,6 +208,21 @@ class ReadingRepository {
         );
   }
 
+  Future<void> updateWereadLinkUrls(
+    int bookId, {
+    String? readerLink,
+    String? deepLink,
+  }) async {
+    await (db.update(
+      db.wereadLinks,
+    )..where((t) => t.bookId.equals(bookId))).write(
+      WereadLinksCompanion(
+        readerLink: Value(readerLink),
+        deepLink: Value(deepLink),
+      ),
+    );
+  }
+
   Future<void> updateWereadLinkSync(
     int bookId, {
     required int remoteProgress,
@@ -365,6 +380,14 @@ class ReadingRepository {
   ///
   /// 只有「在读」会生成待读任务；切到其他状态会停止计时并清掉待读任务。
   /// 标记为「已读」会把进度补到总页数。
+  /// 修改优先级。1 = 高，2 = 中，3 = 低。
+  Future<void> setBookPriority(int bookId, int priority) async {
+    final value = priority.clamp(1, 3);
+    await (db.update(db.books)..where((t) => t.id.equals(bookId))).write(
+      BooksCompanion(priority: Value(value)),
+    );
+  }
+
   Future<void> setBookStatus(int bookId, String status) async {
     final next = BookStatus.normalize(status);
     final book = await getBook(bookId);

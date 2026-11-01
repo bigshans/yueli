@@ -30,6 +30,18 @@ class WereadSyncResult {
   final String message;
 }
 
+class WereadProgressPreview {
+  const WereadProgressPreview({
+    required this.remoteProgress,
+    required this.estimatedPage,
+    required this.finished,
+  });
+
+  final int remoteProgress;
+  final int estimatedPage;
+  final bool finished;
+}
+
 class WereadSyncAllResult {
   const WereadSyncAllResult({
     required this.changed,
@@ -66,6 +78,34 @@ class WereadSyncService {
       throw const WereadAuthException('请先在设置中配置微信读书 API Key');
     }
     return key;
+  }
+
+  /// 只读取微信读书进度，不修改本地页码。
+  Future<WereadProgressPreview> previewBook(int bookId) async {
+    final link = await _repository.getWereadLink(bookId);
+    if (link == null) {
+      throw const WereadImportException('这本书还没有绑定微信读书');
+    }
+    final book = await _repository.getBook(bookId);
+    if (book == null) {
+      throw const WereadImportException('本地书籍不存在');
+    }
+    final progress = await _client.fetchProgress(
+      await _apiKey(),
+      bookId: link.wereadBookId,
+    );
+    final finished = progress.progress >= 100 && progress.finishTime != null;
+    final estimatedPage = finished
+        ? book.totalPages
+        : (book.totalPages * progress.progress / 100)
+              .round()
+              .clamp(0, max(0, book.totalPages - 1))
+              .toInt();
+    return WereadProgressPreview(
+      remoteProgress: progress.progress,
+      estimatedPage: estimatedPage,
+      finished: finished,
+    );
   }
 
   Future<WereadSyncResult> syncBook(

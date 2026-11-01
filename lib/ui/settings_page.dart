@@ -300,9 +300,45 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
   Future<void> _exportData() async {
     try {
+      String? savedKey;
+      try {
+        savedKey = await ref.read(wereadCredentialsProvider).readApiKey();
+      } catch (_) {
+        // 安全存储不可用时仍然可以导出其他数据。
+      }
+      if (!mounted) return;
+
+      var includeWereadKey = false;
+      if (savedKey != null && savedKey.isNotEmpty) {
+        final choice = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('导出完整备份'),
+            content: const Text(
+              '备份会包含书籍、计划、任务、计时记录、阅读轮次、休息日、'
+              '设置、微信读书关联和本地封面。\n\n'
+              '是否同时包含微信读书 API Key？'
+              '包含后恢复备份即可继续使用微信读书，但 Key 会以明文形式保存在 ZIP 中。',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('不包含 Key'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('包含 Key'),
+              ),
+            ],
+          ),
+        );
+        if (choice == null) return;
+        includeWereadKey = choice;
+      }
+
       final bytes = await BackupService(
         ref.read(databaseProvider),
-      ).exportArchiveBytes();
+      ).exportArchiveBytes(wereadApiKey: includeWereadKey ? savedKey : null);
       final fileName = 'yueli-backup-${formatDate(DateTime.now())}.zip';
       final path = await FilePicker.saveFile(
         dialogTitle: '导出阅历数据',
@@ -316,7 +352,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            kIsWeb || path == null ? '已开始下载完整备份（含历史 CSV）' : '数据已导出到 $path',
+            kIsWeb || path == null
+                ? includeWereadKey
+                      ? '已开始下载完整备份（含历史 CSV 和微信读书 Key）'
+                      : '已开始下载完整备份（含历史 CSV）'
+                : includeWereadKey
+                ? '数据已导出到 $path（含微信读书 Key）'
+                : '数据已导出到 $path',
           ),
         ),
       );
@@ -343,7 +385,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       builder: (context) => AlertDialog(
         title: const Text('导入数据？'),
         content: Text(
-          '将用备份文件覆盖当前全部阅读数据（读物、计划、任务、计时记录和设置），'
+          '将用备份文件覆盖当前全部阅读数据（读物、计划、任务、计时记录、设置和微信读书关联），'
           '且无法撤销。\n\n文件：${picked.files.single.name}',
         ),
         actions: [
@@ -367,6 +409,25 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ref.read(databaseProvider),
       ).importBytes(bytes, fileName: file.name);
       if (!mounted) return;
+
+      String? keyWarning;
+      if (summary.wereadApiKey != null && summary.wereadApiKey!.isNotEmpty) {
+        try {
+          await ref
+              .read(wereadCredentialsProvider)
+              .saveApiKey(summary.wereadApiKey!);
+          if (!mounted) return;
+          setState(() {
+            _wereadKey.text = summary.wereadApiKey!;
+            _hasWereadKey = true;
+            _wereadStatus = '已从备份恢复微信读书授权';
+            _wereadStatusOk = true;
+          });
+        } catch (e) {
+          keyWarning = '微信读书 API Key 恢复失败：$e';
+        }
+      }
+
       // 导入的设置要立刻反映到本页表单，避免随后保存时又把旧值写回去。
       final restored = await ref.read(databaseProvider).loadSettings();
       if (!mounted) return;
@@ -382,7 +443,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('导入完成'),
-          content: Text('已恢复：$summary'),
+          content: Text(
+            keyWarning == null ? '已恢复：$summary' : '已恢复：$summary\n\n$keyWarning',
+          ),
           actions: [
             FilledButton(
               onPressed: () => Navigator.pop(context),
@@ -562,7 +625,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            '仅安卓：开始计时时自动打开指定的阅读应用。',
+            '仅安卓：开始计时时自动打开阅读应用。'
+            '已绑定微信读书的书会优先打开对应书籍页面；'
+            '未绑定时打开下面选择的兜底应用。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -744,9 +809,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           ),
           const SizedBox(height: 4),
           Text(
-            '一次导出会生成一个 ZIP 文件：内含可重新导入的完整备份 JSON，'
-            '以及可用 Excel 查看的阅读历史 CSV。'
-            '导入时选择 ZIP 或旧版 JSON 备份即可。',
+            '一次导出会生成 ZIP：包含完整书籍、计划、任务、计时记录、'
+            '阅读轮次、休息日、设置、微信读书关联、本地封面和历史 CSV。'
+            '可选择是否包含微信读书 API Key；导入时选择 ZIP 或旧版 JSON 即可。',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -759,7 +824,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               OutlinedButton.icon(
                 onPressed: _exportData,
                 icon: const Icon(Icons.upload_file_outlined),
-                label: const Text('导出数据'),
+                label: const Text('导出完整备份'),
               ),
               OutlinedButton.icon(
                 onPressed: _importData,

@@ -238,4 +238,48 @@ void main() {
     expect(progress.progress, 45);
     expect(progress.recordReadingTime, 3600);
   });
+  test('DNS 解析失败给出网络提示', () async {
+    final client = WereadClient(
+      httpClient: MockClient((_) async {
+        throw http.ClientException("Failed host lookup: 'i.weread.qq.com'");
+      }),
+    );
+    addTearDown(client.close);
+
+    await expectLater(
+      () => client.call('/shelf/sync', apiKey: 'wrk-test'),
+      throwsA(
+        isA<WereadNetworkException>().having(
+          (e) => e.message,
+          'message',
+          contains('无法解析微信读书服务器域名'),
+        ),
+      ),
+    );
+  });
+  test('兼容嵌套 bookInfo 和 snake_case 链接字段', () {
+    final shelf = WereadShelfBook.fromJson({
+      'bookInfo': {
+        'bookId': '1',
+        'title': '嵌套书',
+        'author': '作者',
+        'reader_link': 'weread://reading?bId=1',
+        'deep_link': 'https://weread.qq.com/web/bookDetail/1',
+      },
+    });
+    expect(shelf.title, '嵌套书');
+    expect(shelf.readerLink, 'weread://reading?bId=1');
+    expect(shelf.deepLink, 'https://weread.qq.com/web/bookDetail/1');
+
+    final info = WereadBookInfo.fromJson({
+      'bookInfo': {
+        'bookId': '1',
+        'title': '嵌套书',
+        'readerLink': 'https://weread.qq.com/web/reader/abc',
+        'deepLink': 'weread://book?bookId=1',
+      },
+    });
+    expect(info.readerLink, 'https://weread.qq.com/web/reader/abc');
+    expect(info.deepLink, 'weread://book?bookId=1');
+  });
 }

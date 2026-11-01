@@ -178,4 +178,20 @@ void main() {
     expect((await repo.getBook(id))!.currentPage, 10);
     expect((await repo.getWereadLink(id))!.remoteProgress, 45);
   });
+  test('预览远端进度只返回估算页，不修改本地页码', () async {
+    final id = await linkedBook(
+      totalPages: 100,
+      currentPage: 10,
+      wereadBookId: 'b1',
+    );
+    final service = buildService({
+      'b1': {'progress': 45},
+    });
+
+    final preview = await service.previewBook(id);
+    expect(preview.remoteProgress, 45);
+    expect(preview.estimatedPage, 45);
+    expect(preview.finished, isFalse);
+    expect((await repo.getBook(id))!.currentPage, 10);
+  });
 }

@@ -57,9 +57,9 @@ class WereadClient {
     } on TimeoutException {
       throw const WereadNetworkException('连接微信读书超时，请稍后重试');
     } on http.ClientException catch (e) {
-      throw WereadNetworkException('连接微信读书失败：${e.message}');
+      throw WereadNetworkException(_networkMessage(e.message));
     } catch (e) {
-      throw WereadNetworkException('连接微信读书失败：$e');
+      throw WereadNetworkException(_networkMessage(e.toString()));
     }
 
     if (response.statusCode == 401 || response.statusCode == 403) {
@@ -208,6 +208,36 @@ class WereadClient {
   }
 }
 
+String _networkMessage(String raw) {
+  final text = raw.toLowerCase();
+  if (text.contains('failed host lookup') ||
+      text.contains('nodename nor servname') ||
+      text.contains('no address associated')) {
+    return '无法解析微信读书服务器域名。'
+        '请检查手机网络、DNS 或代理设置；如果使用正式版，请确认应用有网络权限。';
+  }
+  if (text.contains('connection refused') ||
+      text.contains('connection reset') ||
+      text.contains('network is unreachable')) {
+    return '无法连接微信读书服务器，请检查网络或代理设置。';
+  }
+  return '连接微信读书失败：$raw';
+}
+
+Map<String, dynamic> _bookPayload(Map<String, dynamic> json) {
+  final nested = json['bookInfo'];
+  if (nested is Map<String, dynamic>) return nested;
+  return json;
+}
+
+String? _firstString(Map<String, dynamic> json, List<String> keys) {
+  for (final key in keys) {
+    final value = _string(json[key]);
+    if (value != null) return value;
+  }
+  return null;
+}
+
 String? _string(Object? value) {
   if (value is String) {
     final text = value.trim();
@@ -281,16 +311,27 @@ class WereadShelfBook {
   final bool finishReading;
 
   factory WereadShelfBook.fromJson(Map<String, dynamic> json) {
+    final data = _bookPayload(json);
     return WereadShelfBook(
-      bookId: _string(json['bookId']) ?? '',
-      title: _string(json['title']) ?? '未命名书籍',
-      author: _string(json['author']),
-      cover: _string(json['cover']),
-      category: _string(json['category']),
-      readerLink: _string(json['readerLink']),
-      deepLink: _string(json['deepLink']),
-      readUpdateTime: _dateTimeFromSeconds(json['readUpdateTime']),
-      finishReading: _boolish(json['finishReading']),
+      bookId: _string(data['bookId']) ?? '',
+      title: _string(data['title']) ?? '未命名书籍',
+      author: _string(data['author']),
+      cover: _string(data['cover']),
+      category: _string(data['category']),
+      readerLink: _firstString(data, const [
+        'readerLink',
+        'reader_link',
+        'readerUrl',
+        'reader_url',
+      ]),
+      deepLink: _firstString(data, const [
+        'deepLink',
+        'deep_link',
+        'deepUrl',
+        'deep_url',
+      ]),
+      readUpdateTime: _dateTimeFromSeconds(data['readUpdateTime']),
+      finishReading: _boolish(data['finishReading']),
     );
   }
 }
@@ -333,22 +374,33 @@ class WereadBookInfo {
   final String? deepLink;
 
   factory WereadBookInfo.fromJson(Map<String, dynamic> json) {
+    final data = _bookPayload(json);
     return WereadBookInfo(
-      bookId: _string(json['bookId']) ?? '',
-      title: _string(json['title']) ?? '未命名书籍',
-      author: _string(json['author']),
-      translator: _string(json['translator']),
-      cover: _string(json['cover']),
-      intro: _string(json['intro']),
-      category: _string(json['category']),
-      publisher: _string(json['publisher']),
-      publishDate: _publishDate(json['publishTime']),
-      isbn: _string(json['isbn']),
-      wordCount: _int(json['wordCount']),
-      rating: _double(json['newRating']),
-      ratingCount: _int(json['newRatingCount']),
-      readerLink: _string(json['readerLink']),
-      deepLink: _string(json['deepLink']),
+      bookId: _string(data['bookId']) ?? '',
+      title: _string(data['title']) ?? '未命名书籍',
+      author: _string(data['author']),
+      translator: _string(data['translator']),
+      cover: _string(data['cover']),
+      intro: _string(data['intro']),
+      category: _string(data['category']),
+      publisher: _string(data['publisher']),
+      publishDate: _publishDate(data['publishTime']),
+      isbn: _string(data['isbn']),
+      wordCount: _int(data['wordCount']),
+      rating: _double(data['newRating']),
+      ratingCount: _int(data['newRatingCount']),
+      readerLink: _firstString(data, const [
+        'readerLink',
+        'reader_link',
+        'readerUrl',
+        'reader_url',
+      ]),
+      deepLink: _firstString(data, const [
+        'deepLink',
+        'deep_link',
+        'deepUrl',
+        'deep_url',
+      ]),
     );
   }
 }

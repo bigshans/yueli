@@ -105,6 +105,16 @@ class _BooksPageState extends ConsumerState<BooksPage>
       appBar: AppBar(
         title: const Text('书架'),
         actions: [
+          if (availableTags.isNotEmpty)
+            IconButton(
+              tooltip: '标签筛选',
+              onPressed: () => _pickTags(availableTags),
+              icon: Badge.count(
+                count: _selectedTags.length,
+                isLabelVisible: _selectedTags.isNotEmpty,
+                child: const Icon(Icons.filter_alt_outlined),
+              ),
+            ),
           IconButton(
             tooltip: '从微信读书导入',
             icon: const Icon(Icons.cloud_download_outlined),
@@ -160,34 +170,27 @@ class _BooksPageState extends ConsumerState<BooksPage>
               onChanged: (v) => setState(() => _query = v),
             ),
           ),
-          if (availableTags.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
+          if (_selectedTags.isNotEmpty)
+            SizedBox(
+              height: 42,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  OutlinedButton.icon(
-                    onPressed: () => _pickTags(availableTags),
-                    icon: const Icon(Icons.local_offer_outlined, size: 18),
-                    label: Text(
-                      _selectedTags.isEmpty
-                          ? '标签筛选'
-                          : '标签筛选 · ${_selectedTags.length}',
-                    ),
-                  ),
                   for (final tag in _selectedTags)
-                    InputChip(
-                      label: Text('#$tag'),
-                      onDeleted: () =>
-                          setState(() => _selectedTags.remove(tag)),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: InputChip(
+                        label: Text('#$tag'),
+                        visualDensity: VisualDensity.compact,
+                        onDeleted: () =>
+                            setState(() => _selectedTags.remove(tag)),
+                      ),
                     ),
-                  if (_selectedTags.isNotEmpty)
-                    TextButton(
-                      onPressed: () => setState(_selectedTags.clear),
-                      child: const Text('清除'),
-                    ),
+                  TextButton(
+                    onPressed: () => setState(_selectedTags.clear),
+                    child: const Text('清除'),
+                  ),
                 ],
               ),
             ),
@@ -410,9 +413,41 @@ class _BookTile extends ConsumerWidget {
                           ),
                         ),
                         const Spacer(),
-                        _PriorityBadge(
-                          label: _priorityLabel,
-                          priority: book.priority,
+                        PopupMenuButton<int>(
+                          tooltip: '修改优先级',
+                          initialValue: book.priority,
+                          onSelected: (priority) async {
+                            await ref
+                                .read(repositoryProvider)
+                                .setBookPriority(book.id, priority);
+                            if (context.mounted) {
+                              final label =
+                                  const {1: '高', 2: '中', 3: '低'}[priority] ??
+                                  '中';
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('优先级已设为「$label」')),
+                              );
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            for (final entry in const {
+                              1: '高',
+                              2: '中',
+                              3: '低',
+                            }.entries)
+                              CheckedPopupMenuItem(
+                                value: entry.key,
+                                checked: book.priority == entry.key,
+                                child: Text('${entry.value}优先级'),
+                              ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: _PriorityBadge(
+                              label: _priorityLabel,
+                              priority: book.priority,
+                            ),
+                          ),
                         ),
                       ],
                     ),

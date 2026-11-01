@@ -470,6 +470,15 @@ void main() {
     expect(parseTags(null), isEmpty);
   });
 
+  test('快速修改优先级', () async {
+    final id = await repo.createBook(title: '优先级测试', totalPages: 100);
+    expect((await repo.getBook(id))!.priority, 2);
+    await repo.setBookPriority(id, 1);
+    expect((await repo.getBook(id))!.priority, 1);
+    await repo.setBookPriority(id, 3);
+    expect((await repo.getBook(id))!.priority, 3);
+  });
+
   test('全局删除标签会从所有书籍中移除', () async {
     final a = await repo.createBook(
       title: '书 A',

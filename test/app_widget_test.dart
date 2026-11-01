@@ -308,7 +308,7 @@ void main() {
     await tester.enterText(search, '');
     await settle(tester);
 
-    await tester.tap(find.text('标签筛选'));
+    await tester.tap(find.byTooltip('标签筛选'));
     await settle(tester);
     await tester.tap(find.widgetWithText(FilterChip, '#小说'));
     await tester.tap(find.text('完成'));
@@ -316,7 +316,7 @@ void main() {
     expect(find.text('另一本'), findsOneWidget);
     expect(find.text('深入浅出'), findsNothing);
 
-    await tester.tap(find.textContaining('标签筛选').first);
+    await tester.tap(find.byTooltip('标签筛选'));
     await settle(tester);
     await tester.tap(find.widgetWithText(FilterChip, '#技术'));
     await tester.tap(find.text('完成'));
