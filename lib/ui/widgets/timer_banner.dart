@@ -217,6 +217,7 @@ Future<void> showStopTimerDialog(BuildContext context, WidgetRef ref) async {
     context: context,
     builder: (context) => StatefulBuilder(
       builder: (context, setState) => AlertDialog(
+        scrollable: true,
         title: const Text('结束计时'),
         content: Column(
           mainAxisSize: MainAxisSize.min,

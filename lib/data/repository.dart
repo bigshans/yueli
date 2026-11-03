@@ -780,6 +780,24 @@ class ReadingRepository {
     await reschedulePlan(task.planId);
   }
 
+  /// 取消当天的跳过：把 skipped 任务恢复为待读并重新排期。
+  ///
+  /// 与 [reopenTask] 不同，这里不会回退书本进度：跳过本身不影响进度，
+  /// 若之后又通过手动补记读到了后面的页码，取消跳过也不应把进度改回去。
+  Future<void> unskipTask(int taskId, {DateTime? now}) async {
+    final task = await getTask(taskId);
+    if (task == null || task.status != 'skipped') return;
+
+    await (db.update(db.tasks)..where((t) => t.id.equals(taskId))).write(
+      const TasksCompanion(
+        status: Value('pending'),
+        actualMinutes: Value(null),
+        reachedPage: Value(null),
+      ),
+    );
+    await reschedulePlan(task.planId, now: now);
+  }
+
   /// 撤销完成，回到 pending，并重排。
   Future<void> reopenTask(int taskId) async {
     final task = await getTask(taskId);

@@ -119,7 +119,7 @@ class TaskCard extends ConsumerWidget {
               ),
             ),
             if (_skipped)
-              _chip(context, '已跳过', theme.colorScheme.outline)
+              _skippedChip(context, ref)
             else if (_done)
               _chip(context, '已完成', theme.colorScheme.primary)
             else
@@ -128,6 +128,56 @@ class TaskCard extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _skippedChip(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final today = ref.watch(logicalTodayProvider);
+    final canUndo = dateOnly(item.task.date) == dateOnly(today);
+    final color = theme.colorScheme.outline;
+
+    final chip = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            canUndo ? '已跳过 · 撤销' : '已跳过',
+            style: TextStyle(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (canUndo) ...[
+            const SizedBox(width: 4),
+            Icon(Icons.undo, size: 13, color: color),
+          ],
+        ],
+      ),
+    );
+
+    if (!canUndo) return chip;
+    return Tooltip(
+      message: '取消跳过',
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => _cancelSkip(context, ref),
+        child: chip,
+      ),
+    );
+  }
+
+  Future<void> _cancelSkip(BuildContext context, WidgetRef ref) async {
+    await ref.read(repositoryProvider).unskipTask(item.task.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('已取消跳过，任务已恢复')));
   }
 
   Widget _chip(BuildContext context, String label, Color color) {
@@ -204,6 +254,7 @@ class TaskCard extends ConsumerWidget {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        scrollable: true,
         title: Text('完成《${item.book.title}》'),
         content: Column(
           mainAxisSize: MainAxisSize.min,

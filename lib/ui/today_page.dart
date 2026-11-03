@@ -206,6 +206,7 @@ class _ManualRecordDialogState extends State<_ManualRecordDialog> {
     final added = (reached ?? book.currentPage) - book.currentPage;
 
     return AlertDialog(
+      scrollable: true,
       title: const Text('手动补记页数'),
       content: Column(
         mainAxisSize: MainAxisSize.min,

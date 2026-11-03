@@ -109,6 +109,46 @@ void main() {
     expect(after.any((t) => t.task.status == 'skipped'), isTrue);
   });
 
+  test('当天跳过后可以取消跳过并恢复今天的任务', () async {
+    final id = await repo.createBook(title: '测试书', totalPages: 30);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 2),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+
+    final before = await repo.tasksBetween(today(), addDays(today(), 2));
+    final first = before.first;
+    await repo.completeTask(first.task.id, skipped: true);
+
+    // 跳过当天不会再排今天的任务。
+    var tasks = await repo.tasksBetween(today(), addDays(today(), 2));
+    expect(
+      tasks.where((t) => t.task.date == today() && t.task.status == 'pending'),
+      isEmpty,
+    );
+
+    await repo.unskipTask(first.task.id);
+
+    tasks = await repo.tasksBetween(today(), addDays(today(), 2));
+    expect(tasks.any((t) => t.task.status == 'skipped'), isFalse);
+    final restoredToday = tasks.where(
+      (t) => t.task.date == today() && t.task.status == 'pending',
+    );
+    expect(restoredToday, hasLength(1));
+    expect(restoredToday.single.task.startPage, 1);
+
+    final pendingPages = tasks
+        .where((t) => t.task.status == 'pending')
+        .fold<int>(0, (s, t) => s + (t.task.endPage - t.task.startPage + 1));
+    expect(pendingPages, 30);
+
+    final book = await repo.getBook(id);
+    expect(book!.currentPage, 0); // 取消跳过不改变进度
+  });
+
   test('修改阅读速度后所有活动计划重算', () async {
     final id = await repo.createBook(title: '测试书', totalPages: 100);
     await repo.savePlan(
