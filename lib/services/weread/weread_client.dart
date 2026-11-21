@@ -19,12 +19,18 @@ class WereadClient {
        endpoint = endpoint ?? Uri.parse(_defaultEndpoint);
 
   static const _defaultEndpoint = 'https://i.weread.qq.com/api/agent/gateway';
-  // 对应官方 weread-skills 1.0.5（Tencent/WeChatReading）。
-  static const skillVersion = '1.0.5';
+  // 对应官方 weread-skills 1.0.6（Tencent/WeChatReading）。
+  static const skillVersion = '1.0.6';
 
   final http.Client _http;
   final Uri endpoint;
   final Duration timeout;
+
+  /// 最近一次回包里的非阻塞升级提示（没有则为 null）。
+  String? _lastUpgradeNotice;
+
+  /// 最近一次回包携带的升级提示，仅用于提示用户，不影响请求结果。
+  String? get upgradeNotice => _lastUpgradeNotice;
 
   /// 调用任意 Gateway 接口，返回解析后的 JSON Map。
   Future<Map<String, dynamic>> call(
@@ -84,15 +90,10 @@ class WereadClient {
       );
     }
 
-    final upgrade = decoded['upgrade_info'];
-    if (upgrade != null && upgrade != false) {
-      final message = upgrade is Map
-          ? (upgrade['message']?.toString() ?? '').trim()
-          : upgrade.toString().trim();
-      throw WereadUpgradeException(
-        message.isEmpty ? '微信读书 Skill 需要升级，请更新后再同步' : message,
-      );
-    }
+    // 1.0.6 起 upgrade_info 只是非阻塞升级通知：同一次回包里仍然带有业务数据，
+    // 不能因为它抛错中断同步（否则线上会出现“接口突然全部失败”）。
+    // 同步结束后由 UI 侧提示升级即可，这里不参与控制流。
+    _lastUpgradeNotice = _upgradeMessage(decoded['upgrade_info']);
 
     final errcode = _asInt(decoded['errcode']);
     if (errcode != null && errcode != 0) {
@@ -197,6 +198,14 @@ class WereadClient {
     if (value is num) return value.toInt();
     if (value is String) return int.tryParse(value);
     return null;
+  }
+
+  static String? _upgradeMessage(Object? upgrade) {
+    if (upgrade == null || upgrade == false) return null;
+    final message = upgrade is Map
+        ? (upgrade['message']?.toString() ?? '').trim()
+        : upgrade.toString().trim();
+    return message.isEmpty ? null : message;
   }
 
   static String? _messageOf(Map<String, dynamic> data) {
@@ -466,10 +475,6 @@ sealed class WereadException implements Exception {
 
 class WereadAuthException extends WereadException {
   const WereadAuthException(super.message);
-}
-
-class WereadUpgradeException extends WereadException {
-  const WereadUpgradeException(super.message);
 }
 
 class WereadApiException extends WereadException {

@@ -37,7 +37,7 @@ void main() {
     expect(body['bookId'], '43208843');
     expect(body['mode'], 'overall');
     expect(body.containsKey('params'), isFalse);
-    expect(WereadClient.skillVersion, '1.0.5');
+    expect(WereadClient.skillVersion, '1.0.6');
   });
 
   test('validateApiKey 通过 /shelf/sync 返回书架数量', () async {
@@ -94,12 +94,15 @@ void main() {
     );
   });
 
-  test('升级提示转为 WereadUpgradeException', () async {
+  test('升级提示是非阻塞的，仍然返回业务数据', () async {
     final client = WereadClient(
       httpClient: MockClient(
         (_) async => http.Response(
           jsonEncode({
             'upgrade_info': {'message': '请升级到 1.1.0'},
+            'books': [
+              {'bookId': 'a', 'title': 'A'},
+            ],
           }),
           200,
           headers: {'content-type': 'application/json'},
@@ -108,16 +111,9 @@ void main() {
     );
     addTearDown(client.close);
 
-    expect(
-      () => client.call('/shelf/sync', apiKey: 'wrk-test'),
-      throwsA(
-        isA<WereadUpgradeException>().having(
-          (e) => e.message,
-          'message',
-          '请升级到 1.1.0',
-        ),
-      ),
-    );
+    final books = await client.fetchShelf('wrk-test');
+    expect(books.map((b) => b.bookId), ['a']);
+    expect(client.upgradeNotice, '请升级到 1.1.0');
   });
 
   test('HTTP 401 转为 WereadAuthException', () async {

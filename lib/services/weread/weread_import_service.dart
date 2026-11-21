@@ -115,16 +115,10 @@ class WereadImportService {
     );
   }
 
-  Future<int> importPreview(
-    WereadImportPreview preview, {
-    bool addWereadTag = true,
-  }) async {
+  Future<int> importPreview(WereadImportPreview preview) async {
     final info = preview.info;
     final shelf = preview.shelfBook;
-    final tags = buildWereadTags(
-      info.category ?? shelf.category,
-      addWereadTag: addWereadTag,
-    );
+    final tags = buildWereadTags(info.category ?? shelf.category);
     final bookId = await _repository.createBook(
       title: info.title.trim().isEmpty ? shelf.title : info.title.trim(),
       author: _nonEmpty(info.author) ?? _nonEmpty(shelf.author),
@@ -379,7 +373,7 @@ String normalizeWereadAuthor(String? author) {
 }
 
 /// 分类转标签。分类可能是 `计算机/编程/程序设计` 这类路径。
-List<String> buildWereadTags(String? category, {bool addWereadTag = true}) {
+List<String> buildWereadTags(String? category) {
   final tags = <String>{};
   final text = category?.trim() ?? '';
   if (text.isNotEmpty) {
@@ -388,6 +382,5 @@ List<String> buildWereadTags(String? category, {bool addWereadTag = true}) {
       if (tag.isNotEmpty && tag.length <= 40) tags.add(tag);
     }
   }
-  if (addWereadTag) tags.add('微信读书');
   return tags.toList();
 }

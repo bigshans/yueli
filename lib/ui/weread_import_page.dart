@@ -26,7 +26,6 @@ class _WereadImportPageState extends ConsumerState<WereadImportPage> {
   Set<int> _linkedLocalIds = const {};
   bool _loading = true;
   bool _importing = false;
-  bool _addWereadTag = true;
   int _importDone = 0;
   String? _error;
   String _query = '';
@@ -172,7 +171,7 @@ class _WereadImportPageState extends ConsumerState<WereadImportPage> {
           await service.bindExistingBook(bookId: existing.id, shelfBook: book);
         } else {
           final preview = await service.prepare(book);
-          await service.importPreview(preview, addWereadTag: _addWereadTag);
+          await service.importPreview(preview);
         }
         success++;
       } catch (e) {
@@ -265,15 +264,7 @@ class _WereadImportPageState extends ConsumerState<WereadImportPage> {
                     ],
                     Row(
                       children: [
-                        Checkbox(
-                          value: _addWereadTag,
-                          onChanged: _importing
-                              ? null
-                              : (value) => setState(
-                                  () => _addWereadTag = value ?? true,
-                                ),
-                        ),
-                        const Expanded(child: Text('添加「微信读书」标签')),
+                        const Spacer(),
                         FilledButton.icon(
                           onPressed: _importing || _selected.isEmpty
                               ? null

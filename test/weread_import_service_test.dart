@@ -105,7 +105,8 @@ void main() {
     expect(book.currentPage, 6);
     expect(book.status, BookStatus.reading);
     expect(book.metadataSource, 'weread');
-    expect(parseTags(book.tags), containsAll(['计算机', '编程', '微信读书']));
+    expect(parseTags(book.tags), containsAll(['计算机', '编程']));
+    expect(parseTags(book.tags), isNot(contains('微信读书')));
 
     final link = await repo.getWereadLink(id);
     expect(link, isNotNull);
@@ -159,11 +160,9 @@ void main() {
   });
 
   test('分类转标签会拆分路径并去重', () {
-    expect(
-      buildWereadTags('计算机/编程/程序设计', addWereadTag: true),
-      containsAll(['计算机', '编程', '程序设计', '微信读书']),
-    );
-    expect(buildWereadTags(null, addWereadTag: false), isEmpty);
+    expect(buildWereadTags('计算机/编程/程序设计'), containsAll(['计算机', '编程', '程序设计']));
+    expect(buildWereadTags('计算机/计算机'), ['计算机']);
+    expect(buildWereadTags(null), isEmpty);
   });
   test('已有本地书籍绑定微信读书时不会按百分比修改页码', () async {
     final localId = await repo.createBook(
