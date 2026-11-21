@@ -117,14 +117,10 @@ class _BookFormPageState extends ConsumerState<BookFormPage> {
       _intOrNull(_ratingCount) != null;
 
   Future<void> _pickCover() async {
-    final picked = await FilePicker.pickFiles(
-      type: FileType.image,
-      withData: true,
-      allowMultiple: false,
-    );
-    if (picked == null || picked.files.isEmpty) return;
-    final file = picked.files.single;
-    final bytes = file.bytes ?? await file.xFile.readAsBytes();
+    final picked = await FilePicker.pickFiles(type: FileType.image);
+    if (picked.isEmpty) return;
+    final file = picked.single;
+    final bytes = await file.readAsBytes();
     final path = await saveCoverFile(bytes, file.name);
     if (!mounted || path == null) return;
     final previous = _coverPath;

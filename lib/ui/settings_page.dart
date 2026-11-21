@@ -343,8 +343,6 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       final path = await FilePicker.saveFile(
         dialogTitle: '导出阅历数据',
         fileName: fileName,
-        type: FileType.custom,
-        allowedExtensions: const ['zip'],
         bytes: bytes,
       );
       if (!mounted) return;
@@ -357,8 +355,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       ? '已开始下载完整备份（含历史 CSV 和微信读书 Key）'
                       : '已开始下载完整备份（含历史 CSV）'
                 : includeWereadKey
-                ? '数据已导出到 $path（含微信读书 Key）'
-                : '数据已导出到 $path',
+                ? '数据已导出到 ${_displayPath(path)}（含微信读书 Key）'
+                : '数据已导出到 ${_displayPath(path)}',
           ),
         ),
       );
@@ -375,9 +373,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       dialogTitle: '选择阅历备份文件',
       type: FileType.custom,
       allowedExtensions: const ['zip', 'json'],
-      withData: true,
     );
-    if (picked == null || picked.files.isEmpty) return;
+    if (picked.isEmpty) return;
     if (!mounted) return;
 
     final ok = await showDialog<bool>(
@@ -386,7 +383,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         title: const Text('导入数据？'),
         content: Text(
           '将用备份文件覆盖当前全部阅读数据（读物、计划、任务、计时记录、设置和微信读书关联），'
-          '且无法撤销。\n\n文件：${picked.files.single.name}',
+          '且无法撤销。\n\n文件：${picked.single.name}',
         ),
         actions: [
           TextButton(
@@ -403,8 +400,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     if (ok != true) return;
 
     try {
-      final file = picked.files.single;
-      final bytes = file.bytes ?? await file.xFile.readAsBytes();
+      final file = picked.single;
+      final bytes = await file.readAsBytes();
       final summary = await BackupService(
         ref.read(databaseProvider),
       ).importBytes(bytes, fileName: file.name);
@@ -956,4 +953,10 @@ class _AppPickerSheetState extends State<_AppPickerSheet> {
             ),
     );
   }
+}
+
+/// 把 FilePicker 返回的 Uri 转成可读路径。
+String _displayPath(Uri? uri) {
+  if (uri == null) return '';
+  return uri.isScheme('file') ? uri.toFilePath() : uri.toString();
 }
