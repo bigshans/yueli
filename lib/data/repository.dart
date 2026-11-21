@@ -798,7 +798,7 @@ class ReadingRepository {
     await reschedulePlan(task.planId, now: now);
   }
 
-  /// 撤销完成，回到 pending，并重排。
+  /// 撤销完成：回到待读，并按剩余记录重算进度后重排。
   Future<void> reopenTask(int taskId) async {
     final task = await getTask(taskId);
     if (task == null) return;
@@ -809,16 +809,9 @@ class ReadingRepository {
         reachedPage: Value(null),
       ),
     );
-
-    final book = await getBook(task.bookId);
-    if (book != null && book.currentPage > task.startPage - 1) {
-      await (db.update(db.books)..where((t) => t.id.equals(book.id))).write(
-        BooksCompanion(currentPage: Value(task.startPage - 1)),
-      );
-      final updated = await getBook(book.id);
-      if (updated != null) await _syncBookCompletion(updated);
-    }
-    await reschedulePlan(task.planId);
+    // 进度不再固定回退到 startPage - 1，而是按剩余的阅读记录重放，
+    // 与「编辑记录」共用同一套口径。
+    await _applyReplay(task.bookId, zeroWhenEmpty: true);
   }
 
   // ---------- 计时 ----------
@@ -1237,6 +1230,374 @@ class ReadingRepository {
     );
   }
 
+  // ---------- 轮次 ----------
+
+  /// 删除某一遍阅读（连同这一遍的所有阅读记录），后面的轮次整体前移。
+  ///
+  /// 删掉的是当前轮时，退回到上一轮并按它的记录重算进度；如果这本只剩这一遍，
+  /// 则原地留下一轮空的、从第 1 页开始的新轮次。
+  Future<RoundDeleteResult> deleteRound(int bookId, int round) async {
+    final book = await getBook(bookId);
+    if (book == null) {
+      return const RoundDeleteResult(
+        deletedSessions: 0,
+        round: 1,
+        currentPage: 0,
+      );
+    }
+    final readings =
+        await (db.select(db.readings)
+              ..where((t) => t.bookId.equals(bookId))
+              ..orderBy([(t) => OrderingTerm.asc(t.round)]))
+            .get();
+    final target = readings.where((r) => r.round == round).firstOrNull;
+    if (target == null) {
+      return RoundDeleteResult(
+        deletedSessions: 0,
+        round: book.round,
+        currentPage: book.currentPage,
+      );
+    }
+    final next = readings.where((r) => r.round > round).firstOrNull;
+
+    // 正在为这本书计时且计时属于要删的这一遍时，先取消计时。
+    final settings = await db.loadSettings();
+    if (round == book.round &&
+        settings.activeBookId == bookId &&
+        settings.activeStartedAt != null) {
+      await cancelTimer();
+    }
+
+    final doomed = await (db.select(
+      db.readingSessions,
+    )..where((t) => t.bookId.equals(bookId) & t.round.equals(round))).get();
+
+    await db.transaction(() async {
+      await (db.delete(
+        db.readingSessions,
+      )..where((t) => t.bookId.equals(bookId) & t.round.equals(round))).go();
+
+      // 任务行没有轮次字段，属于哪个轮次只能按时间窗口归属。
+      await (db.delete(db.tasks)..where((t) {
+            var expr =
+                t.bookId.equals(bookId) &
+                t.date.isBiggerOrEqualValue(dateOnly(target.startedAt));
+            if (next != null) {
+              expr = expr & t.date.isSmallerThanValue(dateOnly(next.startedAt));
+            }
+            return expr & t.status.isIn(['done', 'skipped']);
+          }))
+          .go();
+
+      await (db.delete(
+        db.readings,
+      )..where((t) => t.bookId.equals(bookId) & t.round.equals(round))).go();
+
+      // 后面的轮次整体前移，序号保持连续。
+      await db.customStatement(
+        'UPDATE readings SET round = round - 1 WHERE book_id = ? AND round > ?',
+        [bookId, round],
+      );
+      await db.customStatement(
+        'UPDATE reading_sessions SET round = round - 1 '
+        'WHERE book_id = ? AND round > ?',
+        [bookId, round],
+      );
+    });
+
+    final remaining = readings.where((r) => r.round != round).toList();
+    final int newRound;
+    if (remaining.isEmpty) {
+      // 只剩这一遍：原地开一轮空的，从第 1 页重新开始。
+      newRound = 1;
+      await db
+          .into(db.readings)
+          .insert(
+            ReadingsCompanion.insert(
+              bookId: bookId,
+              round: 1,
+              startedAt: DateTime.now(),
+            ),
+          );
+      await (db.update(db.books)..where((t) => t.id.equals(bookId))).write(
+        const BooksCompanion(round: Value(1), currentPage: Value(0)),
+      );
+    } else {
+      // 删的是当前轮时退到上一轮，否则后面的轮次编号前移一位。
+      final int fallback;
+      if (round == book.round) {
+        final earlier = remaining.where((r) => r.round < round);
+        fallback = earlier.isEmpty
+            ? remaining.first.round
+            : earlier.map((r) => r.round).reduce(max);
+      } else {
+        fallback = book.round > round ? book.round - 1 : book.round;
+      }
+      newRound = fallback;
+      await (db.update(db.books)..where((t) => t.id.equals(bookId))).write(
+        BooksCompanion(round: Value(fallback)),
+      );
+    }
+
+    final replay = await _applyReplay(bookId, zeroWhenEmpty: true);
+    return RoundDeleteResult(
+      deletedSessions: doomed.length,
+      round: newRound,
+      currentPage: replay.currentPage,
+    );
+  }
+
+  // ---------- 记录纠错 ----------
+
+  Future<ReadingSession?> getSession(int id) {
+    return (db.select(
+      db.readingSessions,
+    )..where((t) => t.id.equals(id))).getSingleOrNull();
+  }
+
+  /// 修改一条已保存的阅读记录（手动补记或计时记录）。
+  ///
+  /// [reachedPage] 是「读到第几页」的绝对页码，内部换算成该条记录的页数增量；
+  /// 保存后重放整轮记录，修正书本进度并重排后续任务。
+  Future<ReplayResult> updateSession(
+    int sessionId, {
+    required int reachedPage,
+    required int durationSeconds,
+    required DateTime startedAt,
+  }) async {
+    final session = await getSession(sessionId);
+    if (session == null) return ReplayResult.empty;
+    final book = await getBook(session.bookId);
+    if (book == null) return ReplayResult.empty;
+
+    final state = await _replay(
+      session.bookId,
+      sessionOverrides: {sessionId: reachedPage},
+      sessionTimes: {sessionId: startedAt},
+    );
+    final before = state.sessionBefore[sessionId] ?? 0;
+    final after = state.sessionReached[sessionId] ?? before;
+    final seconds = max(0, durationSeconds);
+    final end = seconds > 0
+        ? startedAt.add(Duration(seconds: seconds))
+        : startedAt;
+
+    await (db.update(
+      db.readingSessions,
+    )..where((t) => t.id.equals(sessionId))).write(
+      ReadingSessionsCompanion(
+        pagesRead: Value(max(0, after - before)),
+        durationSeconds: Value(seconds),
+        startedAt: Value(startedAt),
+        endedAt: Value(end),
+      ),
+    );
+    await recomputeMeasuredPace(session.bookId);
+    return _applyReplay(session.bookId);
+  }
+
+  /// 删除一条阅读记录，并重算进度、重排后续任务。
+  Future<ReplayResult> deleteSession(int sessionId) async {
+    final session = await getSession(sessionId);
+    if (session == null) return ReplayResult.empty;
+    await (db.delete(
+      db.readingSessions,
+    )..where((t) => t.id.equals(sessionId))).go();
+    return _applyReplay(session.bookId, zeroWhenEmpty: true);
+  }
+
+  /// 修改一条已完成任务的阅读结果。
+  Future<ReplayResult> updateCompletedTask(
+    int taskId, {
+    required int reachedPage,
+    int? actualMinutes,
+  }) async {
+    final task = await getTask(taskId);
+    if (task == null || task.status != 'done') return ReplayResult.empty;
+    final book = await getBook(task.bookId);
+    final page = book == null
+        ? max(0, reachedPage)
+        : reachedPage.clamp(0, book.totalPages);
+    await (db.update(db.tasks)..where((t) => t.id.equals(taskId))).write(
+      TasksCompanion(
+        reachedPage: Value(page),
+        actualMinutes: actualMinutes == null
+            ? const Value.absent()
+            : Value(max(0, actualMinutes)),
+      ),
+    );
+    return _applyReplay(task.bookId);
+  }
+
+  /// 预览：把某条记录改成 [reachedPage] 后，书架进度会变成第几页。
+  Future<ReplayPreview> previewSessionEdit(
+    int sessionId, {
+    int? reachedPage,
+    DateTime? startedAt,
+  }) async {
+    final session = await getSession(sessionId);
+    if (session == null) return ReplayPreview.empty;
+    final book = await getBook(session.bookId);
+    if (book == null) return ReplayPreview.empty;
+    final state = await _replay(
+      session.bookId,
+      sessionOverrides: reachedPage == null ? null : {sessionId: reachedPage},
+      sessionTimes: startedAt == null ? null : {sessionId: startedAt},
+    );
+    return ReplayPreview(
+      previousPage: book.currentPage,
+      nextPage: state.hasCurrentRound ? state.currentPage : book.currentPage,
+      reachedBefore: state.sessionBefore[sessionId] ?? 0,
+      reachedAfter: state.sessionReached[sessionId] ?? 0,
+    );
+  }
+
+  /// 预览：把某条已完成任务的结果改成 [reachedPage] 后，书架进度会变成第几页。
+  Future<ReplayPreview> previewTaskEdit(int taskId, {int? reachedPage}) async {
+    final task = await getTask(taskId);
+    if (task == null) return ReplayPreview.empty;
+    final book = await getBook(task.bookId);
+    if (book == null) return ReplayPreview.empty;
+    final state = await _replay(
+      task.bookId,
+      taskOverrides: reachedPage == null ? null : {taskId: reachedPage},
+    );
+    return ReplayPreview(
+      previousPage: book.currentPage,
+      nextPage: state.hasCurrentRound ? state.currentPage : book.currentPage,
+      reachedBefore: state.taskBefore[taskId] ?? 0,
+      reachedAfter: state.taskReached[taskId] ?? 0,
+    );
+  }
+
+  /// 按记录重放整轮阅读，修正书本进度并重排后续任务。
+  Future<ReplayResult> replayProgress(int bookId) => _applyReplay(bookId);
+
+  Future<ReplayResult> _applyReplay(
+    int bookId, {
+    bool zeroWhenEmpty = false,
+  }) async {
+    final book = await getBook(bookId);
+    if (book == null) return ReplayResult.empty;
+    final state = await _replay(bookId);
+    final previous = book.currentPage;
+    // 当前这一遍没有任何记录时一般不动进度（可能是直接填写的进度，也可能刚开始重读）；
+    // 但删除/撤销掉记录时，应当把进度退还回去。
+    if (!state.hasCurrentRound && !zeroWhenEmpty) {
+      return ReplayResult(previousPage: previous, currentPage: previous);
+    }
+    final next = state.hasCurrentRound
+        ? (book.totalPages > 0
+              ? state.currentPage.clamp(0, book.totalPages)
+              : max(0, state.currentPage))
+        : 0;
+    if (next != previous) {
+      await (db.update(db.books)..where((t) => t.id.equals(bookId))).write(
+        BooksCompanion(currentPage: Value(next)),
+      );
+      final updated = await getBook(bookId);
+      if (updated != null) await _syncBookCompletion(updated);
+    }
+    final plan = await getPlanForBook(bookId);
+    if (plan != null) await reschedulePlan(plan.id);
+    return ReplayResult(previousPage: previous, currentPage: next);
+  }
+
+  /// 按时间顺序重放一本书当前这一遍的所有阅读事件。
+  ///
+  /// 事件有两类：计时/补记产生的 session（记录的是页数增量），以及没有对应
+  /// session 的已完成任务（记录的是绝对页码）。同一个任务的 session 优先，
+  /// 避免计时完成的任务被算两次。
+  Future<_ReplayState> _replay(
+    int bookId, {
+    Map<int, int>? sessionOverrides,
+    Map<int, int>? taskOverrides,
+    Map<int, DateTime>? sessionTimes,
+  }) async {
+    final state = _ReplayState();
+    final book = await getBook(bookId);
+    if (book == null) return state;
+    final limit = book.totalPages > 0 ? book.totalPages : 1 << 30;
+
+    final sessions =
+        await (db.select(db.readingSessions)
+              ..where((t) => t.bookId.equals(bookId))
+              ..orderBy([
+                (t) => OrderingTerm.asc(t.startedAt),
+                (t) => OrderingTerm.asc(t.id),
+              ]))
+            .get();
+
+    // 当前这一遍的起始时间，用来排除上一遍遗留的已完成任务。
+    final roundRow =
+        await (db.select(db.readings)..where(
+              (t) => t.bookId.equals(bookId) & t.round.equals(book.round),
+            ))
+            .getSingleOrNull();
+    final roundStart = roundRow?.startedAt;
+
+    final tasks = await (db.select(
+      db.tasks,
+    )..where((t) => t.bookId.equals(bookId) & t.status.equals('done'))).get();
+    final linked = {
+      for (final s in sessions)
+        if (s.taskId != null) s.taskId!,
+    };
+
+    final events =
+        <_ReplayEvent>[
+          for (final s in sessions)
+            _ReplayEvent(
+              time: sessionTimes?[s.id] ?? s.startedAt,
+              order: s.id,
+              round: s.round,
+              sessionId: s.id,
+              delta: s.pagesRead ?? 0,
+            ),
+          for (final t in tasks)
+            if (t.reachedPage != null && !linked.contains(t.id))
+              if (roundStart == null || !t.date.isBefore(dateOnly(roundStart)))
+                _ReplayEvent(
+                  time: t.date.add(const Duration(hours: 23, minutes: 59)),
+                  order: 1 << 20 | t.id,
+                  round: book.round,
+                  taskId: t.id,
+                  absolute: t.reachedPage!,
+                ),
+        ]..sort((a, b) {
+          final byTime = a.time.compareTo(b.time);
+          return byTime != 0 ? byTime : a.order.compareTo(b.order);
+        });
+
+    // 每一遍阅读各自从第 0 页开始累加，互不影响。
+    for (final round in {for (final e in events) e.round}) {
+      var reached = 0;
+      for (final e in events.where((e) => e.round == round)) {
+        if (e.sessionId != null) {
+          final id = e.sessionId!;
+          state.sessionBefore[id] = reached;
+          final override = sessionOverrides?[id];
+          reached = override == null
+              ? max(0, reached + e.delta)
+              : max(reached, override);
+          reached = min(reached, limit);
+          state.sessionReached[id] = reached;
+        } else if (e.taskId != null) {
+          final id = e.taskId!;
+          state.taskBefore[id] = reached;
+          final override = taskOverrides?[id];
+          reached = (override ?? e.absolute ?? reached).clamp(0, limit);
+          state.taskReached[id] = reached;
+        }
+      }
+      state.roundFinal[round] = reached;
+    }
+
+    state.hasCurrentRound = state.roundFinal.containsKey(book.round);
+    state.currentPage = state.roundFinal[book.round] ?? 0;
+    return state;
+  }
+
   // ---------- 设置 ----------
 
   /// 设置「计时时自动打开指定应用」。
@@ -1299,4 +1660,93 @@ class _DayAcc {
   int seconds = 0;
   int pages = 0;
   int sessions = 0;
+}
+
+/// 编辑记录后重算进度得到的结果。
+class ReplayResult {
+  const ReplayResult({required this.previousPage, required this.currentPage});
+
+  static const empty = ReplayResult(previousPage: 0, currentPage: 0);
+
+  final int previousPage;
+  final int currentPage;
+
+  bool get changed => previousPage != currentPage;
+}
+
+/// 编辑记录前的进度预览。
+class ReplayPreview {
+  const ReplayPreview({
+    required this.previousPage,
+    required this.nextPage,
+    required this.reachedBefore,
+    required this.reachedAfter,
+  });
+
+  static const empty = ReplayPreview(
+    previousPage: 0,
+    nextPage: 0,
+    reachedBefore: 0,
+    reachedAfter: 0,
+  );
+
+  /// 当前书架进度。
+  final int previousPage;
+
+  /// 保存后的书架进度。
+  final int nextPage;
+
+  /// 这条记录之前的到达页，用来换算「本次读了多少页」。
+  final int reachedBefore;
+
+  /// 这条记录之后的到达页。
+  final int reachedAfter;
+}
+
+class _ReplayEvent {
+  _ReplayEvent({
+    required this.time,
+    required this.order,
+    required this.round,
+    this.sessionId,
+    this.taskId,
+    this.delta = 0,
+    this.absolute,
+  });
+
+  final DateTime time;
+  final int order;
+  final int round;
+  final int? sessionId;
+  final int? taskId;
+  final int delta;
+  final int? absolute;
+}
+
+class _ReplayState {
+  int currentPage = 0;
+  bool hasCurrentRound = false;
+  final Map<int, int> roundFinal = {};
+  final Map<int, int> sessionBefore = {};
+  final Map<int, int> sessionReached = {};
+  final Map<int, int> taskBefore = {};
+  final Map<int, int> taskReached = {};
+}
+
+/// 删除某一遍阅读后的结果。
+class RoundDeleteResult {
+  const RoundDeleteResult({
+    required this.deletedSessions,
+    required this.round,
+    required this.currentPage,
+  });
+
+  /// 被删掉的阅读记录条数。
+  final int deletedSessions;
+
+  /// 删除后这本书的当前轮次。
+  final int round;
+
+  /// 删除后的书架进度。
+  final int currentPage;
 }

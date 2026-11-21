@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/date_x.dart';
 import '../../data/repository.dart';
 import '../../state/providers.dart';
+import 'record_edit_sheet.dart';
 import 'timer_banner.dart';
 
 /// 单条阅读任务卡片：勾选完成后可记录读到的页码、也可计时或跳过。
@@ -40,8 +41,9 @@ class TaskCard extends ConsumerWidget {
     final pagePart = readPages > 0
         ? '已读 $readPages / $targetPages 页'
         : '目标 $targetPages 页';
-    final overPart =
-        readPages > targetPages ? '超额 +${readPages - targetPages} 页' : null;
+    final overPart = readPages > targetPages
+        ? '超额 +${readPages - targetPages} 页'
+        : null;
     final timePart = readMinutes > 0
         ? '用时 ${formatMinutes(readMinutes)}'
         : '预计 ${formatMinutes(task.plannedMinutes)}';
@@ -65,63 +67,74 @@ class TaskCard extends ConsumerWidget {
               shape: const CircleBorder(),
             ),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          item.book.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            decoration:
-                                muted ? TextDecoration.lineThrough : null,
-                            color: muted
-                                ? theme.colorScheme.onSurfaceVariant
-                                : null,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: _done ? () => showTaskEditSheet(context, item) : null,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            item.book.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              decoration: muted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              color: muted
+                                  ? theme.colorScheme.onSurfaceVariant
+                                  : null,
+                            ),
                           ),
                         ),
-                      ),
-                      if (showDate) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                          formatDateCn(task.date),
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            color: theme.colorScheme.primary,
+                        if (showDate) ...[
+                          const SizedBox(width: 8),
+                          Text(
+                            formatDateCn(task.date),
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.primary,
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    parts.join(' · '),
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                  if (!_done && !_skipped && readPages > 0 && targetPages > 0) ...[
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: LinearProgressIndicator(
-                        value: (readPages / targetPages).clamp(0.0, 1.0),
-                        minHeight: 5,
-                        backgroundColor:
-                            theme.colorScheme.surfaceContainerHighest,
+                    const SizedBox(height: 2),
+                    Text(
+                      parts.join(' · '),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
+                    if (!_done &&
+                        !_skipped &&
+                        readPages > 0 &&
+                        targetPages > 0) ...[
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: (readPages / targetPages).clamp(0.0, 1.0),
+                          minHeight: 5,
+                          backgroundColor:
+                              theme.colorScheme.surfaceContainerHighest,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
             if (_skipped)
               _skippedChip(context, ref)
             else if (_done)
-              _chip(context, '已完成', theme.colorScheme.primary)
+              Tooltip(
+                message: '点文字可修改结果',
+                child: _chip(context, '已完成', theme.colorScheme.primary),
+              )
             else
               _menu(context, ref),
           ],
@@ -189,8 +202,11 @@ class TaskCard extends ConsumerWidget {
       ),
       child: Text(
         label,
-        style:
-            TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+        style: TextStyle(
+          color: color,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -210,6 +226,8 @@ class TaskCard extends ConsumerWidget {
             );
           case 'skip':
             await repo.completeTask(item.task.id, skipped: true);
+          case 'record':
+            await _showCompleteDialog(context, ref);
         }
       },
       itemBuilder: (context) => const [
@@ -220,6 +238,15 @@ class TaskCard extends ConsumerWidget {
             contentPadding: EdgeInsets.zero,
             leading: Icon(Icons.timer_outlined),
             title: Text('开始计时'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'record',
+          child: ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            leading: Icon(Icons.edit_note_outlined),
+            title: Text('完成并记录读数'),
           ),
         ),
         PopupMenuItem(
@@ -239,17 +266,28 @@ class TaskCard extends ConsumerWidget {
     final repo = ref.read(repositoryProvider);
     if (_done) {
       await repo.reopenTask(item.task.id);
-    } else {
-      await _showCompleteDialog(context, ref);
+      return;
     }
+    // 勾选就是完成，不需要任何输入；想记录实际读数走菜单或点文字。
+    await repo.completeTask(item.task.id);
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('已标记完成'),
+        action: SnackBarAction(
+          label: '撤销',
+          onPressed: () => repo.reopenTask(item.task.id),
+        ),
+      ),
+    );
   }
 
   Future<void> _showCompleteDialog(BuildContext context, WidgetRef ref) async {
     final task = item.task;
-    final pageController =
-        TextEditingController(text: task.endPage.toString());
-    final minutesController =
-        TextEditingController(text: task.plannedMinutes.toString());
+    final pageController = TextEditingController(text: task.endPage.toString());
+    final minutesController = TextEditingController(
+      text: task.plannedMinutes.toString(),
+    );
 
     final ok = await showDialog<bool>(
       context: context,
@@ -304,10 +342,8 @@ class TaskCard extends ConsumerWidget {
     if (ok != true) return;
     final page = int.tryParse(pageController.text.trim());
     final minutes = int.tryParse(minutesController.text.trim());
-    await ref.read(repositoryProvider).completeTask(
-          item.task.id,
-          reachedPage: page,
-          actualMinutes: minutes,
-        );
+    await ref
+        .read(repositoryProvider)
+        .completeTask(item.task.id, reachedPage: page, actualMinutes: minutes);
   }
 }

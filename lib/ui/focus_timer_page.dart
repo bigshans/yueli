@@ -107,9 +107,9 @@ class _TimerBody extends ConsumerWidget {
                 taskOnDateProvider((bookId, ref.watch(logicalTodayProvider))),
               )
               .valueOrNull;
-    final targetPages = todayTask == null
-        ? plan?.dailyPages
-        : todayTask.endPage - todayTask.startPage + 1;
+    final targetLabel = todayTask != null
+        ? '第 ${todayTask.startPage}–${todayTask.endPage} 页'
+        : (plan?.dailyPages != null ? '每天 ${plan!.dailyPages} 页' : null);
 
     final pace = (book != null && settings != null)
         ? effectivePace(book, settings)
@@ -188,6 +188,44 @@ class _TimerBody extends ConsumerWidget {
                         color: scheme.onSurfaceVariant,
                       ),
                     ),
+                    if (targetLabel != null) ...[
+                      const SizedBox(height: 10),
+                      Container(
+                        constraints: const BoxConstraints(maxWidth: 210),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: scheme.primaryContainer,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              '阅读目标',
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(
+                                    color: scheme.onPrimaryContainer.withValues(
+                                      alpha: 0.72,
+                                    ),
+                                  ),
+                            ),
+                            const SizedBox(height: 1),
+                            Text(
+                              targetLabel,
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(
+                                    color: scheme.onPrimaryContainer,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -195,11 +233,7 @@ class _TimerBody extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
           Text(
-            overTarget
-                ? '已达成今日目标，真棒！'
-                : (targetPages != null
-                      ? '今日目标 $targetPages 页 · 专注读书，把手机放一边'
-                      : '专注读书中，把手机放到一边'),
+            overTarget ? '已达成今日专注目标，真棒！' : '专注读书，把手机放一边',
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: overTarget ? scheme.tertiary : scheme.onSurfaceVariant,

@@ -5,6 +5,7 @@ import '../core/date_x.dart';
 import '../data/database.dart';
 import '../data/repository.dart';
 import '../state/providers.dart';
+import 'widgets/record_edit_sheet.dart';
 import 'widgets/task_card.dart';
 import 'widgets/timer_banner.dart';
 
@@ -237,12 +238,12 @@ class _BookGroupHeader extends StatelessWidget {
   }
 }
 
-class _SessionTile extends StatelessWidget {
+class _SessionTile extends ConsumerWidget {
   const _SessionTile({required this.session});
   final ReadingSession session;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final pages = session.pagesRead;
@@ -250,42 +251,53 @@ class _SessionTile extends StatelessWidget {
     String hm(DateTime d) =>
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Material(
         color: scheme.surfaceContainerLow,
         borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.timer_outlined, size: 18, color: scheme.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => showSessionEditSheet(context, session),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            child: Row(
               children: [
-                Text(
-                  manual
-                      ? '手动补记'
-                      : '${hm(session.startedAt)}–${hm(session.endedAt)}',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                Icon(Icons.timer_outlined, size: 18, color: scheme.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        manual
+                            ? '手动补记'
+                            : '${hm(session.startedAt)}–${hm(session.endedAt)}',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Text(
+                        '${manual ? '' : '${formatDuration(session.durationSeconds)} · '}'
+                        '${pages ?? 0} 页'
+                        '${session.round > 1 ? ' · 第 ${session.round} 遍' : ''}',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 1),
-                Text(
-                  '${manual ? '' : '${formatDuration(session.durationSeconds)} · '}'
-                  '${pages ?? 0} 页'
-                  '${session.round > 1 ? ' · 第 ${session.round} 遍' : ''}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
+                Icon(
+                  Icons.edit_outlined,
+                  size: 15,
+                  color: scheme.outlineVariant,
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

@@ -314,34 +314,16 @@ class _BookTile extends ConsumerWidget {
                           const SizedBox(width: 2),
                           Text(rating, style: theme.textTheme.labelSmall),
                         ],
-                        PopupMenuButton<String>(
-                          tooltip: '修改阅读状态',
-                          initialValue: book.status,
-                          onSelected: (next) async {
-                            await ref
-                                .read(repositoryProvider)
-                                .setBookStatus(book.id, next);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    '已标记为「${BookStatus.label(next)}」',
-                                  ),
-                                ),
-                              );
-                            }
-                          },
-                          itemBuilder: (context) => [
-                            for (final status in BookStatus.all)
-                              CheckedPopupMenuItem(
-                                value: status,
-                                checked: book.status == status,
-                                child: Text(BookStatus.label(status)),
-                              ),
-                          ],
-                          child: const Padding(
-                            padding: EdgeInsets.all(4),
-                            child: Icon(Icons.more_vert, size: 18),
+                        IconButton(
+                          tooltip: '编辑书籍',
+                          visualDensity: VisualDensity.compact,
+                          padding: const EdgeInsets.all(4),
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          onPressed: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => BookFormPage(book: book),
+                            ),
                           ),
                         ),
                       ],

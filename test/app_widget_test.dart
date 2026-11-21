@@ -331,4 +331,33 @@ void main() {
 
     await unmount(tester);
   });
+
+  testWidgets('勾选任务直接完成，不弹填写对话框', (tester) async {
+    final db = AppDatabase(NativeDatabase.memory());
+    addTearDown(db.close);
+    final repo = ReadingRepository(db);
+    final id = await repo.createBook(title: '勾选书', totalPages: 30);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 2),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+
+    await tester.pumpWidget(appWith(db));
+    await settle(tester);
+
+    await tester.tap(find.byType(Checkbox).first);
+    await settle(tester);
+
+    expect(find.textContaining('完成《'), findsNothing);
+    final tasks = await repo.tasksBetween(today(), today());
+    expect(tasks.single.task.status, 'done');
+    expect(tasks.single.task.reachedPage, tasks.single.task.endPage);
+
+    // 让「已完成」的 SnackBar 计时器走完，再卸载组件树。
+    await tester.pump(const Duration(seconds: 6));
+    await unmount(tester);
+  });
 }

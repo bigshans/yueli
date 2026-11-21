@@ -14,6 +14,7 @@ import 'plan_editor_page.dart';
 import 'stats_page.dart';
 import 'weread_bind_page.dart';
 import 'widgets/book_cover.dart';
+import 'widgets/record_edit_sheet.dart';
 import 'widgets/task_card.dart';
 import 'widgets/timer_banner.dart';
 
@@ -1212,36 +1213,41 @@ class _RecentHistory extends ConsumerWidget {
     final start = s.startedAt;
     final hm =
         '${start.hour.toString().padLeft(2, '0')}:${start.minute.toString().padLeft(2, '0')}';
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(Icons.timer_outlined, size: 16, color: scheme.outline),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${start.month}/${start.day} $hm',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => showSessionEditSheet(context, s),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.timer_outlined, size: 16, color: scheme.outline),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${start.month}/${start.day} $hm',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                   ),
-                ),
-                Text(
-                  '${formatDuration(s.durationSeconds)}'
-                  '${pages != null ? ' · $pages 页' : ''}'
-                  '${pace != null ? ' · ${pace.toStringAsFixed(0)} 页/小时' : ''}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+                  Text(
+                    '${formatDuration(s.durationSeconds)}'
+                    '${pages != null ? ' · $pages 页' : ''}'
+                    '${pace != null ? ' · ${pace.toStringAsFixed(0)} 页/小时' : ''}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+            Icon(Icons.edit_outlined, size: 14, color: scheme.outlineVariant),
+          ],
+        ),
       ),
     );
   }
@@ -1279,7 +1285,17 @@ class _ReadingRounds extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final r in readings) _row(context, r, totals[r.round]),
+            for (final r in readings)
+              _row(
+                context,
+                ref,
+                r,
+                totals[r.round],
+                sessionsInRound: sessions
+                    .where((s) => s.round == r.round)
+                    .length,
+                hasEarlier: readings.any((o) => o.round < r.round),
+              ),
             const SizedBox(height: 8),
             FilledButton.tonalIcon(
               onPressed: () => _confirmReread(context, ref, finished: finished),
@@ -1292,7 +1308,14 @@ class _ReadingRounds extends ConsumerWidget {
     );
   }
 
-  Widget _row(BuildContext context, Reading r, (int, int)? total) {
+  Widget _row(
+    BuildContext context,
+    WidgetRef ref,
+    Reading r,
+    (int, int)? total, {
+    required int sessionsInRound,
+    required bool hasEarlier,
+  }) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final isCurrent = r.round == book.round;
@@ -1339,7 +1362,79 @@ class _ReadingRounds extends ConsumerWidget {
               ],
             ),
           ),
+          PopupMenuButton<String>(
+            tooltip: '更多',
+            icon: const Icon(Icons.more_vert, size: 18),
+            onSelected: (value) {
+              if (value == 'delete') {
+                _confirmDelete(
+                  context,
+                  ref,
+                  r,
+                  sessionsInRound: sessionsInRound,
+                  hasEarlier: hasEarlier,
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              PopupMenuItem(
+                value: 'delete',
+                child: Text('删除这一遍', style: TextStyle(color: scheme.error)),
+              ),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    Reading r, {
+    required int sessionsInRound,
+    required bool hasEarlier,
+  }) async {
+    final isCurrent = r.round == book.round;
+    final String consequence;
+    if (isCurrent && hasEarlier) {
+      consequence = '删完后这本书记为第 ${r.round - 1} 遍，进度按那一遍的记录重算。';
+    } else if (isCurrent) {
+      consequence = '删完后这本书从第 1 页重新开始。';
+    } else {
+      consequence = '后面的轮次会整体前移一位。';
+    }
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('删除第 ${r.round} 遍的阅读记录？'),
+        content: Text('将删除这一遍的 $sessionsInRound 条阅读记录，删除后无法恢复。\n$consequence'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final result = await ref
+        .read(repositoryProvider)
+        .deleteRound(book.id, r.round);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          '已删除第 ${r.round} 遍（${result.deletedSessions} 条记录），'
+          '当前为第 ${result.round} 遍，进度第 ${result.currentPage} 页',
+        ),
       ),
     );
   }

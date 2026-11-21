@@ -9,6 +9,7 @@ import '../data/repository.dart';
 import '../domain/scheduling/scheduler.dart';
 import '../state/providers.dart';
 import 'widgets/reading_heatmap.dart';
+import 'widgets/record_edit_sheet.dart';
 import 'widgets/timer_banner.dart';
 
 enum _RangeOption { d7, d30, d90, custom, all }
@@ -980,14 +981,14 @@ class _DayTile extends StatelessWidget {
   }
 }
 
-/// 单次记录：起止时间、时长、页数、速度。
-class _SessionRow extends StatelessWidget {
+/// 单次记录：起止时间、时长、页数、速度。点开可修改或删除。
+class _SessionRow extends ConsumerWidget {
   const _SessionRow({required this.session, required this.showDate});
   final ReadingSession session;
   final bool showDate;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final s = session;
@@ -1001,36 +1002,41 @@ class _SessionRow extends StatelessWidget {
     String hm(DateTime d) =>
         '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
-      child: Row(
-        children: [
-          Icon(Icons.timer_outlined, size: 15, color: scheme.outline),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${showDate ? '${start.month}/${start.day} ' : ''}'
-                  '${manual ? '手动补记' : '${hm(start)}–${hm(end)}'}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+    return InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: () => showSessionEditSheet(context, s),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 5),
+        child: Row(
+          children: [
+            Icon(Icons.timer_outlined, size: 15, color: scheme.outline),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${showDate ? '${start.month}/${start.day} ' : ''}'
+                    '${manual ? '手动补记' : '${hm(start)}–${hm(end)}'}',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                   ),
-                ),
-                Text(
-                  '${manual ? '' : '${formatDuration(s.durationSeconds)} · '}'
-                  '${pages ?? 0} 页'
-                  '${pace != null ? ' · ${pace.toStringAsFixed(0)} 页/小时' : ''}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+                  Text(
+                    '${manual ? '' : '${formatDuration(s.durationSeconds)} · '}'
+                    '${pages ?? 0} 页'
+                    '${pace != null ? ' · ${pace.toStringAsFixed(0)} 页/小时' : ''}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+            Icon(Icons.edit_outlined, size: 14, color: scheme.outlineVariant),
+          ],
+        ),
       ),
     );
   }

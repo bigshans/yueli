@@ -1,4 +1,4 @@
-import 'package:drift/drift.dart' show Value;
+import 'package:drift/drift.dart' show OrderingTerm, Value;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reader_management/core/date_x.dart';
@@ -778,5 +778,272 @@ void main() {
     final book = await repo.getBook(id);
     expect(book!.status, BookStatus.finished);
     expect(book.currentPage, 20);
+  });
+
+  test('补记页码输错后可以改回来，进度和统计一起修正', () async {
+    final id = await repo.createBook(title: '纠错书', totalPages: 320);
+    final day = today().add(const Duration(hours: 12));
+    await repo.logPagesRead(bookId: id, reachedPage: 268, at: day);
+    expect((await repo.getBook(id))!.currentPage, 268);
+
+    final session = (await (db.select(db.readingSessions)).get()).single;
+    final preview = await repo.previewSessionEdit(session.id, reachedPage: 168);
+    expect(preview.previousPage, 268);
+    expect(preview.nextPage, 168);
+    expect(preview.reachedBefore, 0);
+
+    final result = await repo.updateSession(
+      session.id,
+      reachedPage: 168,
+      durationSeconds: 0,
+      startedAt: day,
+    );
+    expect(result.previousPage, 268);
+    expect(result.currentPage, 168);
+
+    final book = await repo.getBook(id);
+    expect(book!.currentPage, 168);
+    expect(book.status, BookStatus.reading);
+    final stored = await repo.getSession(session.id);
+    expect(stored!.pagesRead, 168);
+    expect((await repo.bookStats(id)).totalPages, 168);
+  });
+
+  test('改正中间一条记录时，后面记录的到达页整体顺延', () async {
+    final id = await repo.createBook(title: '链条书', totalPages: 300);
+    final day = DateTime(2024, 5, 1, 12);
+    await repo.logPagesRead(bookId: id, reachedPage: 40, at: day);
+    await repo.logPagesRead(
+      bookId: id,
+      reachedPage: 80,
+      at: day.add(const Duration(days: 1)),
+    );
+    await repo.logPagesRead(
+      bookId: id,
+      reachedPage: 120,
+      at: day.add(const Duration(days: 2)),
+    );
+
+    final sessions = await (db.select(
+      db.readingSessions,
+    )..orderBy([(t) => OrderingTerm.asc(t.startedAt)])).get();
+    // 把第一条从 40 页改成 20 页，后面的记录各自保留自己的增量。
+    await repo.updateSession(
+      sessions.first.id,
+      reachedPage: 20,
+      durationSeconds: 0,
+      startedAt: sessions.first.startedAt,
+    );
+
+    expect((await repo.getBook(id))!.currentPage, 100);
+    final updated = await (db.select(
+      db.readingSessions,
+    )..orderBy([(t) => OrderingTerm.asc(t.startedAt)])).get();
+    expect(updated.map((s) => s.pagesRead), [20, 40, 40]);
+  });
+
+  test('删除一条记录后进度退回去，并重排后续任务', () async {
+    final id = await repo.createBook(title: '删除书', totalPages: 200);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 9),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    await repo.logPagesRead(
+      bookId: id,
+      reachedPage: 60,
+      at: today().add(const Duration(hours: 12)),
+    );
+    expect((await repo.getBook(id))!.currentPage, 60);
+
+    final session = (await (db.select(db.readingSessions)).get()).single;
+    final result = await repo.deleteSession(session.id);
+    expect(result.currentPage, 0);
+
+    final book = await repo.getBook(id);
+    expect(book!.currentPage, 0);
+    // 重排后第一个待读任务从第 1 页重新开始。
+    final tasks = await repo.tasksBetween(today(), addDays(today(), 9));
+    expect(tasks.first.task.startPage, 1);
+  });
+
+  test('完成任务的结果可以修改，进度跟着改', () async {
+    final id = await repo.createBook(title: '任务书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final task = (await repo.tasksBetween(today(), today())).single;
+    await repo.completeTask(task.task.id, reachedPage: 25, actualMinutes: 50);
+    expect((await repo.getBook(id))!.currentPage, 25);
+
+    final preview = await repo.previewTaskEdit(task.task.id, reachedPage: 18);
+    expect(preview.previousPage, 25);
+    expect(preview.nextPage, 18);
+
+    final result = await repo.updateCompletedTask(
+      task.task.id,
+      reachedPage: 18,
+      actualMinutes: 30,
+    );
+    expect(result.currentPage, 18);
+    expect((await repo.getBook(id))!.currentPage, 18);
+    final stored = await repo.getTask(task.task.id);
+    expect(stored!.reachedPage, 18);
+    expect(stored.actualMinutes, 30);
+  });
+
+  test('计时完成的记录只算一次，改页码不同时改两份', () async {
+    final id = await repo.createBook(title: '计时书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 4),
+      dailyMinutes: 60,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    final task = (await repo.tasksBetween(today(), today())).single;
+    final t0 = today().add(const Duration(hours: 9));
+    await repo.startTimer(bookId: id, taskId: task.task.id, now: t0);
+    await repo.stopTimer(
+      reachedPage: 30,
+      completeTask: true,
+      now: t0.add(const Duration(minutes: 40)),
+    );
+    expect((await repo.getBook(id))!.currentPage, 30);
+
+    final session = (await (db.select(db.readingSessions)).get()).single;
+    // 计时记录与任务行指向同一次阅读，重放时不能算两遍。
+    expect(session.taskId, task.task.id);
+    final preview = await repo.previewSessionEdit(session.id, reachedPage: 20);
+    expect(preview.previousPage, 30);
+    expect(preview.nextPage, 20);
+
+    await repo.updateSession(
+      session.id,
+      reachedPage: 20,
+      durationSeconds: 40 * 60,
+      startedAt: session.startedAt,
+    );
+    expect((await repo.getBook(id))!.currentPage, 20);
+    expect((await repo.getSession(session.id))!.pagesRead, 20);
+  });
+
+  test('改成 0 页不会把进度改小，仍按本条之前的到达页算', () async {
+    final id = await repo.createBook(title: '零页书', totalPages: 100);
+    final day = DateTime(2024, 5, 1, 12);
+    await repo.logPagesRead(bookId: id, reachedPage: 40, at: day);
+    await repo.logPagesRead(
+      bookId: id,
+      reachedPage: 60,
+      at: day.add(const Duration(days: 1)),
+    );
+
+    final last = (await (db.select(
+      db.readingSessions,
+    )..orderBy([(t) => OrderingTerm.desc(t.startedAt)])).get()).first;
+    final preview = await repo.previewSessionEdit(last.id, reachedPage: 0);
+    // 不能早于第 40 页，预览会把页码抬回本条之前的到达页。
+    expect(preview.reachedBefore, 40);
+    expect(preview.reachedAfter, 40);
+    expect(preview.nextPage, 40);
+  });
+
+  test('删除中间一轮后，后面的轮次前移且进度不变', () async {
+    final id = await repo.createBook(title: '轮次书', totalPages: 300);
+    await repo.logPagesRead(bookId: id, reachedPage: 40);
+    await repo.startReread(id);
+    await repo.logPagesRead(bookId: id, reachedPage: 30);
+    await repo.startReread(id);
+    await repo.logPagesRead(bookId: id, reachedPage: 20);
+    expect((await repo.getBook(id))!.round, 3);
+
+    final result = await repo.deleteRound(id, 2);
+    expect(result.deletedSessions, 1);
+    expect(result.round, 2);
+    expect(result.currentPage, 20);
+
+    final book = await repo.getBook(id);
+    expect(book!.round, 2);
+    expect(book.currentPage, 20);
+
+    final rounds = await repo.watchReadings(id).first;
+    expect(rounds.map((r) => r.round), [1, 2]);
+    final sessions = await (db.select(db.readingSessions)).get();
+    expect(sessions.map((s) => s.round).toSet(), {1, 2});
+    expect(sessions.fold<int>(0, (sum, s) => sum + (s.pagesRead ?? 0)), 60);
+  });
+
+  test('删除当前轮后退回上一轮，进度和阅读状态跟着回去', () async {
+    final id = await repo.createBook(title: '回退书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 2),
+      dailyMinutes: 600,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    await repo.logPagesRead(bookId: id, reachedPage: 100);
+    expect((await repo.getBook(id))!.status, BookStatus.finished);
+
+    await repo.startReread(id);
+    await repo.logPagesRead(bookId: id, reachedPage: 30);
+    expect((await repo.getBook(id))!.round, 2);
+    expect((await repo.getBook(id))!.currentPage, 30);
+
+    final result = await repo.deleteRound(id, 2);
+    expect(result.round, 1);
+    expect(result.currentPage, 100);
+
+    final book = await repo.getBook(id);
+    expect(book!.round, 1);
+    expect(book.currentPage, 100);
+    expect(book.status, BookStatus.finished);
+  });
+
+  test('删除唯一的一遍后从第 1 页重新开始', () async {
+    final id = await repo.createBook(title: '单轮书', totalPages: 200);
+    await repo.logPagesRead(bookId: id, reachedPage: 50);
+
+    final result = await repo.deleteRound(id, 1);
+    expect(result.deletedSessions, 1);
+    expect(result.round, 1);
+    expect(result.currentPage, 0);
+
+    final book = await repo.getBook(id);
+    expect(book!.round, 1);
+    expect(book.currentPage, 0);
+    expect((await repo.watchReadings(id).first).map((r) => r.round), [1]);
+    expect(await (db.select(db.readingSessions)).get(), isEmpty);
+  });
+
+  test('删除轮次会一并清掉那一遍完成的任务，避免重算时复活进度', () async {
+    final id = await repo.createBook(title: '任务轮次书', totalPages: 100);
+    await repo.savePlan(
+      bookId: id,
+      startDate: today(),
+      deadline: addDays(today(), 3),
+      dailyMinutes: 600,
+      weekdays: {1, 2, 3, 4, 5, 6, 7},
+    );
+    await repo.logPagesRead(bookId: id, reachedPage: 100);
+    await repo.startReread(id);
+
+    final task = (await repo.tasksBetween(today(), addDays(today(), 3))).first;
+    await repo.completeTask(task.task.id, reachedPage: 100);
+
+    final result = await repo.deleteRound(id, 2);
+    expect(result.round, 1);
+    expect(result.currentPage, 100);
+    // 第 2 遍完成的任务已经不在，第 1 遍的进度不会被它顶回去。
+    final done = await (db.select(
+      db.tasks,
+    )..where((t) => t.status.equals('done'))).get();
+    expect(done, isEmpty);
   });
 }
